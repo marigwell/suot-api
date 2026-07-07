@@ -21,4 +21,10 @@ def create_item(item_data: ItemCreate) -> Item:
     next_id += 1
     return item
 
+def get_item_by_id(item_id: int) -> Item | None:
+    for item in items:
+        if item.id == item_id:
+            return item
+    return None
+
 
