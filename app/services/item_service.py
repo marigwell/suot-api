@@ -42,3 +42,10 @@ def update_item(item_id: int, item_data: ItemCreate) -> Item | None:
             return updated_item
 
     return None
+
+def delete_item(item_id: int) -> bool:
+    for i, item in enumerate(items):
+        if item.id == item_id:
+            items.pop(i)
+            return True
+    return False

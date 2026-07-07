@@ -43,3 +43,24 @@ Why enumerate?
 
 - Used to be able to access both the index and the item associated with the index
 
+- DEL : Deletes an item
+
+Algorithm of DEL:
+
+Iterate though every item in the inventory
+
+    If the current item's id matches item_id
+
+        Pop the item from the list based on its index
+
+        Return the updated item list
+    
+    If the loop finishes without finding anything
+
+        Return None
+
+Designing how IDs should work: IDs should never be reused
+
+i.e. if an item is deleted and a new one is created, the new one should never reuse an ID of a deleted item
+
+This is because the IDs of deleted items act as receipts by users and we do not want to overwrite that with new data
