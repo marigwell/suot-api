@@ -64,3 +64,33 @@ Designing how IDs should work: IDs should never be reused
 i.e. if an item is deleted and a new one is created, the new one should never reuse an ID of a deleted item
 
 This is because the IDs of deleted items act as receipts by users and we do not want to overwrite that with new data
+
+## CRUD Finished
+
+# Day 3
+
+- Learn how to make a real database
+- How HTTP requests becomes data stored in a SQL database
+- How we can retrieve that data back
+
+##What is an ORM?
+
+ORM = Object Relational Mapper
+
+A tool that lets your code interact with a relational database using programming language objects instead of writing SQL directly.
+
+ORMs are bidirectional -> goes both ways -> posting data and retrieving data
+
+It translates between:
+- Python objects → SQL database
+- SQL database → Python objects
+
+This lets you work with Python objects instead of wriing raw SQL
+
+db.add() vs. dbcommit()
+
+db.add(item)
+- Tells SQLAlchemy to prepare/track an object to be saved.
+
+db.commit()
+- Permanently saves all pending changes to the database.
