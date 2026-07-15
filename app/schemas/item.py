@@ -1,3 +1,5 @@
+# /schemas/item.py
+
 from pydantic import BaseModel, ConfigDict
 
 class ItemCreate(BaseModel):

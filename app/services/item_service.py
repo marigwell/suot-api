@@ -1,3 +1,6 @@
+# /services/item_service.py
+# The service should handle database operation, item creation, item update, item deletion
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -22,9 +25,9 @@ def create_item(db: Session, item_data: ItemCreate) -> ItemModel:
         size=item_data.size,
     )
 
-    db.add(item)
-    db.commit()
-    db.refresh(item)
+    db.add(item) # stage object for insert
+    db.commit() # save transaction
+    db.refresh(item) # reload generated database values, like id
 
     return item
 

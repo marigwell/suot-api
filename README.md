@@ -6,9 +6,9 @@ uv add --dev ruff pytest
 
 # Goals / MVP checkpoints
 
-Phase 1: In-memory CRUD
-Phase 2: SQLite persistence
-Phase 3: PostgreSQL
+Phase 1: In-memory CRUD -
+Phase 2: SQLite persistence -
+Phase 3: PostgreSQL *
 Phase 4: SQLAlchemy models and sessions
 Phase 5: authentication
 Phase 6: user-owned inventory
@@ -78,7 +78,7 @@ i.e. if an item is deleted and a new one is created, the new one should never re
 
 This is because the IDs of deleted items act as receipts by users and we do not want to overwrite that with new data
 
-## CRUD Finished
+## Phase 1 Done : CRUD Finished
 
 # Day 3
 
@@ -130,4 +130,6 @@ db.commit() saves it
 db.refresh() gets the generated ID
   ↓
 API returns JSON
+
+## Phase 2 Done
 

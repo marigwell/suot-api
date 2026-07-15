@@ -1,14 +1,24 @@
+# database.py
+
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 # Database configuration
-DATA_BASE_URL = "sqlite:///./suot.db"
+DATABASE_URL = "sqlite:///./suot.db"
 
 # Connection between manager between the app and SQLite
-engine = create_engine(DATA_BASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False},
+)
+
+SessionLocal = sessionmaker(
+    expire_on_commit=False, 
+    autoflush=False, 
+    bind=engine
+)
 
 class Base(DeclarativeBase):
     pass

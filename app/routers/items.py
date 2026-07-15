@@ -1,3 +1,7 @@
+# /routers/items.py
+# Router should handle HTTP route, request body, path parameters,
+# 404 exceptions, response model
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,21 +23,21 @@ DbSession = Annotated[Session, Depends(get_db)]
 
 
 @router.get("", response_model=list[Item])
-async def list_items(db: DbSession):
+def list_items(db: DbSession):
     """
     Return a list of all items.
     """
     return get_items(db)
 
 @router.post("", response_model=Item)
-async def add_item(item: ItemCreate, db: DbSession):
+def add_item(item: ItemCreate, db: DbSession):
     """
     Create a new clothing item.
     """
     return create_item(db, item)
 
 @router.get("/{item_id}", response_model=Item)
-async def get_item(item_id: int, db: DbSession):
+def get_item(item_id: int, db: DbSession):
     """
     Retrieve an item by its ID.
     """
@@ -45,7 +49,7 @@ async def get_item(item_id: int, db: DbSession):
     return item
 
 @router.put("/{item_id}", response_model=Item)
-async def update_existing_item(
+def update_existing_item(
     item_id: int,
     item_data: ItemCreate,
     db: DbSession,
@@ -61,7 +65,7 @@ async def update_existing_item(
     return updated_item
 
 @router.delete("/{item_id}", response_model=bool)
-async def remove_item(item_id: int, db: DbSession):
+def remove_item(item_id: int, db: DbSession):
     """
     Delete an item by its ID.
     """
