@@ -4,6 +4,19 @@ uv add fastapi
 
 uv add --dev ruff pytest
 
+# Goals / MVP checkpoints
+
+Phase 1: In-memory CRUD
+Phase 2: SQLite persistence
+Phase 3: PostgreSQL
+Phase 4: SQLAlchemy models and sessions
+Phase 5: authentication
+Phase 6: user-owned inventory
+Phase 7: recommendation logic
+Phase 8: testing
+Phase 9: Docker
+Phase 10: deployment
+
 # Day 1
 
 - Making a health check via GET /health
@@ -73,7 +86,7 @@ This is because the IDs of deleted items act as receipts by users and we do not 
 - How HTTP requests becomes data stored in a SQL database
 - How we can retrieve that data back
 
-##What is an ORM?
+## What is an ORM?
 
 ORM = Object Relational Mapper
 
@@ -94,3 +107,10 @@ db.add(item)
 
 db.commit()
 - Permanently saves all pending changes to the database.
+
+# Day 4
+
+We want storage persistence -> data survives after restarting locally
+
+- Add SQLite + SQLAlchemy
+- Create 'items' table
