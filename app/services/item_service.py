@@ -1,59 +1,62 @@
-from app.schemas.item import Item, ItemCreate
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-items: list[Item] = []
-next_id = 1
-
-
-def get_items() -> list[Item]:
-    return items
+from app.models.item import ItemModel
+from app.schemas.item import ItemCreate
 
 
-def create_item(item_data: ItemCreate) -> Item:
-    global next_id
+def get_items(db: Session) -> list[ItemModel]:
+    statement = select(ItemModel)
+    return list(db.scalars(statement).all())
 
-    item = Item(
-        id=next_id,
+
+def get_item_by_id(db: Session, item_id: int) -> ItemModel | None:
+    return db.get(ItemModel, item_id)
+
+
+def create_item(db: Session, item_data: ItemCreate) -> ItemModel:
+    item = ItemModel(
         name=item_data.name,
         category=item_data.category,
         color=item_data.color,
         size=item_data.size,
     )
 
-    items.append(item)
-    next_id += 1
+    db.add(item)
+    db.commit()
+    db.refresh(item)
 
     return item
 
 
-def get_item_by_id(item_id: int) -> Item | None:
-    for item in items:
-        if item.id == item_id:
-            return item
+def update_item(
+    db: Session,
+    item_id: int,
+    item_data: ItemCreate,
+) -> ItemModel | None:
+    item = db.get(ItemModel, item_id)
 
-    return None
+    if item is None:
+        return None
 
+    item.name = item_data.name
+    item.category = item_data.category
+    item.color = item_data.color
+    item.size = item_data.size
 
-def update_item(item_id: int, item_data: ItemCreate) -> Item | None:
-    for i, item in enumerate(items):
-        if item.id == item_id:
-            updated_item = Item(
-                id=item_id,
-                name=item_data.name,
-                category=item_data.category,
-                color=item_data.color,
-                size=item_data.size,
-            )
+    db.commit()
+    db.refresh(item)
 
-            items[i] = updated_item
-            return updated_item
-
-    return None
+    return item
 
 
-def delete_item(item_id: int) -> bool:
-    for i, item in enumerate(items):
-        if item.id == item_id:
-            items.pop(i)
-            return True
+def delete_item(db: Session, item_id: int) -> bool:
+    item = db.get(ItemModel, item_id)
 
-    return False
+    if item is None:
+        return False
+
+    db.delete(item)
+    db.commit()
+
+    return True

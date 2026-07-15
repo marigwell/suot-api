@@ -1,0 +1,33 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables / secrets
+.env
+.env.*
+
+# SQLite local dbs
+*.db
+*.sqlite
+*.sqlite3
+
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Linter / type checker caches
+.ruff_cache/
+.mypy_cache/
+
+# Editor / OS Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

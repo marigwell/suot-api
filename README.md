@@ -114,3 +114,20 @@ We want storage persistence -> data survives after restarting locally
 
 - Add SQLite + SQLAlchemy
 - Create 'items' table
+
+POST /items
+  ↓
+Router receives request
+  ↓
+FastAPI creates DB session
+  ↓
+Service creates ItemModel
+  ↓
+SQLAlchemy inserts row into SQLite
+  ↓
+db.commit() saves it
+  ↓
+db.refresh() gets the generated ID
+  ↓
+API returns JSON
+
