@@ -2,7 +2,7 @@
 
 Suot API is a backend engineering project for building a fashion inventory and recommendation system.
 
-The goal of this project is to deeply understand backend API development, including REST design, service-layer architecture, database persistence, authentication, and recommendation logic.
+The goal of this project is to deeply understand backend API development, including REST design, service-layer architecture, database persistence, automated testing, authentication, and recommendation logic.
 
 ## Tech Stack
 
@@ -22,6 +22,8 @@ The goal of this project is to deeply understand backend API development, includ
 - SQLite persistence with SQLAlchemy
 - Pydantic request and response schemas
 - Service-layer architecture
+- Automated API tests with pytest
+- Isolated test database
 - FastAPI Swagger/OpenAPI documentation
 
 ## API Endpoints
@@ -68,6 +70,9 @@ app/
 ├── schemas/
 ├── services/
 └── models/
+
+tests/
+└── test_items.py
 ```
 
 ## Running Locally
@@ -90,12 +95,18 @@ Open the API docs:
 http://127.0.0.1:8000/docs
 ```
 
+Run tests:
+
+```bash
+uv run pytest
+```
+
 ## Roadmap
 
-- Phase 1: In-memory item CRUD - DONE
-- Phase 2: SQLite persistence with SQLAlchemy - DONE
-- Phase 3: Code review, cleanup, and tests - WIP
-- Phase 4: PostgreSQL - WIP
+- Phase 1: In-memory item CRUD — DONE
+- Phase 2: SQLite persistence with SQLAlchemy — DONE
+- Phase 3: Code review, cleanup, and item CRUD tests — DONE
+- Phase 4: PostgreSQL
 - Phase 5: Alembic migrations
 - Phase 6: Authentication
 - Phase 7: User-owned inventory

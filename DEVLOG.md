@@ -276,6 +276,146 @@ Phase 2 complete: SQLite persistence with SQLAlchemy finished.
 
 ---
 
+## Day 5 — API Testing with pytest
+
+### Goal
+
+Add automated tests so item CRUD behavior can be verified without manually using Swagger UI every time.
+
+### Work Completed
+
+- Created a `tests/` folder outside of the `app/` folder.
+- Added `tests/test_items.py`.
+- Added pytest configuration to `pyproject.toml`.
+- Fixed import path issues so tests can import the FastAPI app.
+- Added an isolated test database.
+- Added tests for item CRUD endpoints.
+- Confirmed all tests pass with `uv run pytest`.
+
+### Why Tests Matter
+
+Before testing, I had to manually check endpoints through Swagger UI.
+
+Now, pytest can automatically verify that the API still works.
+
+This matters because as the project grows, tests help catch broken behavior early.
+
+### Test Folder Structure
+
+```txt
+suot-api/
+├── app/
+├── tests/
+│   └── test_items.py
+├── pyproject.toml
+└── README.md
+```
+
+The `app/` folder contains the actual application.
+
+The `tests/` folder contains code that checks whether the application works correctly.
+
+### pytest Configuration
+
+Added this to `pyproject.toml`:
+
+```toml
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+```
+
+This tells pytest:
+
+```txt
+Use the project root as an import path.
+Look for tests inside the tests folder.
+```
+
+This fixed the issue where pytest could not import:
+
+```python
+from app.main import app
+```
+
+### Test Database Isolation
+
+The tests use a separate database instead of the normal development database.
+
+Normal app:
+
+```txt
+get_db() → suot.db
+```
+
+Tests:
+
+```txt
+get_db() → test.db
+```
+
+This prevents tests from polluting local development data.
+
+### Dependency Override
+
+FastAPI allows dependencies to be overridden during tests.
+
+The test file overrides the normal database dependency:
+
+```python
+app.dependency_overrides[get_db] = override_get_db
+```
+
+This means:
+
+```txt
+During normal app usage:
+    use the real database session
+
+During tests:
+    use the test database session
+```
+
+### Test Database Reset
+
+Before each test, the test database is reset:
+
+```python
+Base.metadata.drop_all(bind=engine)
+Base.metadata.create_all(bind=engine)
+```
+
+This means every test starts from a clean database state.
+
+That makes the tests predictable and repeatable.
+
+### CRUD Tests Added
+
+The tests cover:
+
+```txt
+POST   /items           → create item
+GET    /items           → list all items
+GET    /items/{id}      → get one item
+GET    /items/999       → return 404 for missing item
+PUT    /items/{id}      → update item
+PUT    /items/999       → return 404 for missing item
+DELETE /items/{id}      → delete item
+DELETE /items/999       → return 404 for missing item
+```
+
+### Test Result
+
+```txt
+8 passed
+```
+
+### Phase 3B Status
+
+Phase 3B complete: item CRUD API is now covered by automated tests.
+
+---
+
 ## Core Notes
 
 ### `database.py`
@@ -488,6 +628,71 @@ id
 
 After `db.refresh(item)`, Python has the latest version of that object.
 
+### `TestClient`
+
+`TestClient` allows pytest to call the FastAPI app without manually running the server.
+
+Example:
+
+```python
+client = TestClient(app)
+```
+
+This lets tests make requests like:
+
+```python
+client.post("/items", json={...})
+client.get("/items")
+client.put("/items/1", json={...})
+client.delete("/items/1")
+```
+
+Simple definition:
+
+```txt
+TestClient = a fake client used to test API endpoints automatically
+```
+
+### Test Database
+
+The test database is separate from the development database.
+
+This keeps tests isolated.
+
+```txt
+Development database → suot.db
+Test database        → test.db
+```
+
+Tests should not depend on existing local data.
+
+Each test should be able to run from a clean starting point.
+
+### `app.dependency_overrides`
+
+`app.dependency_overrides` lets the test replace one FastAPI dependency with another.
+
+In this project, tests replace the normal `get_db()` dependency with a test version.
+
+```python
+app.dependency_overrides[get_db] = override_get_db
+```
+
+This allows the app to use `test.db` during tests instead of `suot.db`.
+
+### `setup_function()`
+
+`setup_function()` runs before each test function.
+
+In this project, it resets the test database:
+
+```python
+Base.metadata.drop_all(bind=engine)
+Base.metadata.create_all(bind=engine)
+```
+
+This makes each test independent and predictable.
+
 ---
 
 ## Current Understanding Summary
@@ -515,3 +720,5 @@ The database session handles communication with SQLite.
 Pydantic schemas define the shape of incoming and outgoing API data.
 
 The project has moved from temporary in-memory storage to persistent database-backed storage.
+
+The project now also has automated tests for item CRUD endpoints, which means the API behavior can be verified with pytest instead of only through manual Swagger testing.
