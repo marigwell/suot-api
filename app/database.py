@@ -1,18 +1,25 @@
 # database.py
 
 from collections.abc import Generator
+from app.config import settings
 import os
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 # Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./suot.db")
+DATABASE_URL = settings.database_url
+
+connect_args = (
+    {"check_same_thread": False}
+    if DATABASE_URL.startswith("sqlite://")
+    else {}
+)
 
 # Connection between manager between the app and SQLite
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False},
+    connect_args=connect_args,
 )
 
 SessionLocal = sessionmaker(

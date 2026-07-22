@@ -11,6 +11,7 @@ env/
 # Environment variables / secrets
 .env
 .env.*
+!.env.example
 
 # SQLite local dbs
 *.db
