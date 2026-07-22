@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:17
+    container_name: suot-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER: suot
+      - POSTGRES_PASSWORD: suot
+      - POSTGRES_DB: suot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

@@ -416,6 +416,117 @@ Phase 3B complete: item CRUD API is now covered by automated tests.
 
 ---
 
+---
+
+## Day 6 — Configuration and Docker Setup
+
+### Goal
+
+Prepare the application for PostgreSQL by separating environment-specific configuration from application logic.
+
+### Work Completed
+
+- Added an application configuration layer with `pydantic-settings`.
+- Created `app/config.py`.
+- Updated `database.py` to read the database URL from settings.
+- Added `.env.example` as a safe configuration template.
+- Kept the real `.env` file ignored by Git.
+- Installed Docker Desktop.
+- Verified that the Docker CLI works.
+- Prepared the project for running PostgreSQL locally with Docker Compose.
+
+### Why Configuration Matters
+
+Before this step, the database URL was hardcoded in `database.py`.
+
+That meant the app was directly tied to one database setup.
+
+A better design is:
+
+```txt
+Environment
+  ↓
+Configuration layer
+  ↓
+Database setup
+  ↓
+Application logic
+```
+
+This allows the same application code to run with different databases depending on the environment.
+
+Example:
+
+```txt
+Local development → SQLite
+Testing           → test.db
+Future local DB   → PostgreSQL in Docker
+Production        → hosted PostgreSQL database
+```
+
+### System Design Lesson
+
+Application logic should not be tightly coupled to infrastructure details.
+
+The item routes and item service should not care whether the database is SQLite or PostgreSQL.
+
+The app should only need a database session.
+
+The database configuration should decide where that session connects.
+
+This supports the idea of:
+
+```txt
+same codebase
+different configuration
+different environment
+```
+
+### `.env` vs `.env.example`
+
+The real `.env` file stores local/private configuration.
+
+Example:
+
+```env
+DATABASE_URL=sqlite:///./suot.db
+```
+
+This file should not be committed because future versions may contain secrets, passwords, or production URLs.
+
+The `.env.example` file is safe to commit.
+
+It documents what environment variables the project expects.
+
+```txt
+.env         → private local config
+.env.example → public template for developers
+```
+
+### Docker Setup
+
+Docker will be used to run PostgreSQL as a separate local service.
+
+This is closer to a real backend system because the API and database run as separate processes.
+
+```txt
+FastAPI app
+  ↓
+DATABASE_URL
+  ↓
+PostgreSQL container
+```
+
+### Phase 4A Status
+
+Phase 4A complete: the app now has a configuration layer and is prepared for database switching.
+
+### Phase 4B Status
+
+Phase 4B in progress: Docker is installed and PostgreSQL setup will continue next.
+
+---
+
 ## Core Notes
 
 ### `database.py`
@@ -706,7 +817,7 @@ Service
   ↓
 SQLAlchemy Session
   ↓
-SQLite database
+Database
 ```
 
 The router handles HTTP concerns.
@@ -715,10 +826,12 @@ The service handles item logic.
 
 The SQLAlchemy model defines the database table.
 
-The database session handles communication with SQLite.
+The database session handles communication with the database.
 
 Pydantic schemas define the shape of incoming and outgoing API data.
 
 The project has moved from temporary in-memory storage to persistent database-backed storage.
 
-The project now also has automated tests for item CRUD endpoints, which means the API behavior can be verified with pytest instead of only through manual Swagger testing.
+The project now has automated tests for item CRUD endpoints, which means the API behavior can be verified with pytest instead of only through manual Swagger testing.
+
+The project also now has an application configuration layer, which prepares the backend to switch from SQLite to PostgreSQL without rewriting the router or service layer.
