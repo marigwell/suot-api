@@ -1,12 +1,13 @@
 # database.py
 
 from collections.abc import Generator
+import os
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 # Database configuration
-DATABASE_URL = "sqlite:///./suot.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./suot.db")
 
 # Connection between manager between the app and SQLite
 engine = create_engine(
