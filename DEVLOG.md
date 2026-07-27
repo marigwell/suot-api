@@ -416,13 +416,11 @@ Phase 3B complete: item CRUD API is now covered by automated tests.
 
 ---
 
----
-
-## Day 6 — Configuration and Docker Setup
+## Day 6 — Configuration, PostgreSQL, Docker, and Git Branching
 
 ### Goal
 
-Prepare the application for PostgreSQL by separating environment-specific configuration from application logic.
+Move Suot closer to a real backend system by separating configuration from application logic, running PostgreSQL as a database service, containerizing the FastAPI API, and using Git branches for safer feature work.
 
 ### Work Completed
 
@@ -433,7 +431,19 @@ Prepare the application for PostgreSQL by separating environment-specific config
 - Kept the real `.env` file ignored by Git.
 - Installed Docker Desktop.
 - Verified that the Docker CLI works.
-- Prepared the project for running PostgreSQL locally with Docker Compose.
+- Created `docker-compose.yml`.
+- Ran PostgreSQL inside Docker.
+- Connected the local FastAPI app to the PostgreSQL container.
+- Verified PostgreSQL data directly with `psql`.
+- Created a feature branch for PostgreSQL setup.
+- Created a feature branch for Dockerizing the API.
+- Created a `Dockerfile` for the FastAPI API.
+- Created a `.dockerignore` file.
+- Updated Docker Compose to run both the API and database.
+- Built and ran the API container.
+- Confirmed `docker compose ps` shows both `suot-api` and `suot-postgres` running.
+- Confirmed Swagger works through `http://localhost:8000/docs`.
+- Confirmed item CRUD works through the Dockerized API.
 
 ### Why Configuration Matters
 
@@ -460,70 +470,230 @@ Example:
 ```txt
 Local development → SQLite
 Testing           → test.db
-Future local DB   → PostgreSQL in Docker
+Local Docker      → PostgreSQL in Docker
 Production        → hosted PostgreSQL database
 ```
 
-### System Design Lesson
+### PostgreSQL in Docker
 
-Application logic should not be tightly coupled to infrastructure details.
-
-The item routes and item service should not care whether the database is SQLite or PostgreSQL.
-
-The app should only need a database session.
-
-The database configuration should decide where that session connects.
-
-This supports the idea of:
+SQLite was a local database file:
 
 ```txt
-same codebase
-different configuration
-different environment
+FastAPI app
+  ↓
+suot.db
 ```
 
-### `.env` vs `.env.example`
-
-The real `.env` file stores local/private configuration.
-
-Example:
-
-```env
-DATABASE_URL=sqlite:///./suot.db
-```
-
-This file should not be committed because future versions may contain secrets, passwords, or production URLs.
-
-The `.env.example` file is safe to commit.
-
-It documents what environment variables the project expects.
-
-```txt
-.env         → private local config
-.env.example → public template for developers
-```
-
-### Docker Setup
-
-Docker will be used to run PostgreSQL as a separate local service.
-
-This is closer to a real backend system because the API and database run as separate processes.
+PostgreSQL is a separate database server:
 
 ```txt
 FastAPI app
   ↓
 DATABASE_URL
   ↓
-PostgreSQL container
+PostgreSQL service
 ```
 
-### Phase 4A Status
+This is closer to real backend architecture because the API and database are separate processes.
 
-Phase 4A complete: the app now has a configuration layer and is prepared for database switching.
+### Local API vs Dockerized API
+
+At first, only PostgreSQL was running in Docker.
+
+```txt
+Laptop
+├── FastAPI app running locally with uvicorn
+└── Docker
+    └── PostgreSQL container
+```
+
+In that setup, the API connected to PostgreSQL with:
+
+```env
+DATABASE_URL=postgresql+psycopg://suot:suot@localhost:5432/suot
+```
+
+Then the API was containerized too.
+
+```txt
+Docker Compose
+├── api container
+│   └── FastAPI app
+│
+└── db container
+    └── PostgreSQL database
+```
+
+In this setup, the API connects to PostgreSQL with:
+
+```env
+DATABASE_URL=postgresql+psycopg://suot:suot@db:5432/suot
+```
+
+Important distinction:
+
+```txt
+localhost → used when the API runs on the laptop
+db        → used when the API runs inside Docker Compose
+```
+
+### Docker Concepts Learned
+
+A Docker image is a blueprint for creating a container.
+
+A Docker container is a running instance of an image.
+
+A Docker volume stores persistent data.
+
+A Docker network lets containers communicate.
+
+Docker Compose runs multiple services together.
+
+In this project:
+
+```txt
+Dockerfile          → builds the FastAPI API image
+docker-compose.yml → runs the API and database services
+.dockerignore       → prevents unnecessary/private files from being copied into the image
+api service         → FastAPI application
+db service          → PostgreSQL database
+postgres_data       → persistent PostgreSQL storage
+```
+
+### Amazon Warehouse Analogy
+
+The PostgreSQL database is like a warehouse.
+
+The item rows are like packages.
+
+The database tables are like shelves.
+
+The FastAPI API is like the delivery system that decides how packages are created, read, updated, and deleted.
+
+When only PostgreSQL was in Docker, the warehouse was containerized but the delivery system was still running locally.
+
+After Dockerizing the API, both the delivery system and warehouse run inside Docker Compose.
+
+```txt
+Docker Compose
+├── delivery system → FastAPI API container
+└── warehouse       → PostgreSQL database container
+```
+
+### Testing Clarification
+
+`uv run pytest` still runs tests locally.
+
+It does not run tests inside Docker yet.
+
+Current meaning:
+
+```txt
+uv run pytest
+  → local automated tests for API behavior
+
+http://localhost:8000/docs
+  → manual test of the Dockerized API runtime
+
+psql inside suot-postgres
+  → direct verification of database rows
+```
+
+The current tests are still useful because they protect CRUD behavior.
+
+However, they are not Docker integration tests yet.
+
+### Git Branching Lesson
+
+`main` should represent the stable version of the project.
+
+Feature branches should be used for meaningful work that could break the app.
+
+Examples:
+
+```txt
+feature/postgres-setup
+feature/dockerize-api
+feature/auth
+feature/user-inventory
+```
+
+The basic sequence is:
+
+```txt
+branch → build → test → commit → merge → push
+```
+
+For PostgreSQL setup:
+
+```txt
+feature/postgres-setup
+  ↓
+Run PostgreSQL in Docker
+  ↓
+Connect local FastAPI app to PostgreSQL
+  ↓
+Test with Swagger and psql
+  ↓
+Commit and merge into main
+```
+
+For Dockerizing the API:
+
+```txt
+feature/dockerize-api
+  ↓
+Create Dockerfile
+  ↓
+Create .dockerignore
+  ↓
+Add api service to docker-compose.yml
+  ↓
+Run docker compose up --build
+  ↓
+Test localhost:8000/docs
+  ↓
+Commit and merge into main
+```
+
+Important Git rules:
+
+```txt
+Do not commit .env.
+Do not commit local database files.
+Use branches for backend infrastructure changes.
+Run tests before committing.
+Confirm Docker containers run before merging Docker changes.
+Keep commit messages clear and human-readable.
+```
+
+### Final Checkpoint
+
+By the end of this phase, Suot could run as a local containerized backend system.
+
+Confirmed working:
+
+```txt
+docker compose ps shows:
+- suot-api running
+- suot-postgres running
+```
+
+http://localhost:8000/docs opens Swagger UI
+
+POST /items works through the Dockerized API
+
+GET /items returns data from PostgreSQL
+
+PostgreSQL stores the item rows inside the Dockerized database service
 
 ### Phase 4B Status
 
-Phase 4B in progress: Docker is installed and PostgreSQL setup will continue next.
+Phase 4B complete: PostgreSQL now runs locally through Docker.
+
+### Phase 5 Status
+
+Phase 5 complete: the FastAPI API now runs in Docker with PostgreSQL through Docker Compose.
 
 ---
 
@@ -804,6 +974,143 @@ Base.metadata.create_all(bind=engine)
 
 This makes each test independent and predictable.
 
+### Git Branching
+
+Git branches allow risky or meaningful changes to happen away from `main`.
+
+Simple definition:
+
+```txt
+main = stable project checkpoint
+feature branch = safe workspace for one focused change
+```
+
+Example:
+
+```bash
+git switch main
+git pull
+git switch -c feature/dockerize-api
+```
+
+A good workflow is:
+
+```txt
+branch → build → test → commit → merge → push
+```
+
+This keeps the project organized and prevents half-working infrastructure changes from breaking the stable version.
+
+### Dockerfile
+
+A `Dockerfile` defines how to build the API image.
+
+Simple definition:
+
+```txt
+Dockerfile = build instructions for the API container
+```
+
+In this project, the Dockerfile starts from a Python image, installs dependencies with `uv`, copies the app code, and starts FastAPI with Uvicorn.
+
+### Docker Image
+
+A Docker image is a blueprint.
+
+It contains the runtime environment, dependencies, and application code needed to create a container.
+
+Simple definition:
+
+```txt
+Image = blueprint for a container
+```
+
+### Docker Container
+
+A Docker container is a running instance of an image.
+
+Simple definition:
+
+```txt
+Container = running service created from an image
+```
+
+In this project:
+
+```txt
+suot-api      → running FastAPI container
+suot-postgres → running PostgreSQL container
+```
+
+### Docker Compose
+
+Docker Compose runs multiple services together.
+
+Simple definition:
+
+```txt
+Docker Compose = tool for running multiple containers as one local system
+```
+
+In this project, Docker Compose runs:
+
+```txt
+api service → FastAPI app
+db service  → PostgreSQL database
+```
+
+### Docker Volume
+
+A Docker volume stores persistent data outside the container lifecycle.
+
+This matters because containers can be stopped, removed, and recreated.
+
+The PostgreSQL data survives because it is stored in a volume.
+
+Simple definition:
+
+```txt
+Volume = persistent storage for container data
+```
+
+### Docker Network
+
+Docker Compose creates a network so services can talk to each other.
+
+This is why the API container can connect to the database using:
+
+```txt
+db
+```
+
+The name `db` comes from the Compose service name:
+
+```yaml
+services:
+  db:
+```
+
+### `localhost` vs `db`
+
+When the API runs locally on the laptop, it connects to PostgreSQL through:
+
+```txt
+localhost
+```
+
+When the API runs inside Docker Compose, it connects to PostgreSQL through:
+
+```txt
+db
+```
+
+Reason:
+
+```txt
+localhost inside a container means the container itself.
+db means the PostgreSQL service on the Docker Compose network.
+```
+
 ---
 
 ## Current Understanding Summary
@@ -830,8 +1137,41 @@ The database session handles communication with the database.
 
 Pydantic schemas define the shape of incoming and outgoing API data.
 
-The project has moved from temporary in-memory storage to persistent database-backed storage.
+The project moved from temporary in-memory storage to persistent SQLite storage.
+
+The project then moved from SQLite to PostgreSQL running as a separate Docker service.
 
 The project now has automated tests for item CRUD endpoints, which means the API behavior can be verified with pytest instead of only through manual Swagger testing.
 
-The project also now has an application configuration layer, which prepares the backend to switch from SQLite to PostgreSQL without rewriting the router or service layer.
+The project also has an application configuration layer, which allows the database backend to change through `DATABASE_URL` without rewriting the router or service layer.
+
+The project can now run through Docker Compose with both the FastAPI API and PostgreSQL database as separate containers.
+
+Current Docker architecture:
+
+```txt
+Docker Compose
+├── api container
+│   └── FastAPI app
+│
+└── db container
+    └── PostgreSQL database
+```
+
+The project now uses Git branches for larger changes.
+
+The current Git workflow is:
+
+```txt
+branch → build → test → commit → merge → push
+```
+
+The most important system design lesson so far is that backend systems are made of separate services that communicate through defined interfaces.
+
+FastAPI handles the API behavior.
+
+PostgreSQL stores the data.
+
+Docker Compose runs the services together in a reproducible local environment.
+
+Git branches keep major changes isolated until they are tested and ready to merge.
