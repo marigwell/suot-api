@@ -697,6 +697,299 @@ Phase 5 complete: the FastAPI API now runs in Docker with PostgreSQL through Doc
 
 ---
 
+## Day 7 — Alembic Migrations and Schema Evolution
+
+### Goal
+
+Replace automatic table creation with versioned database migrations, then prove that the database schema can evolve safely over time.
+
+### Work Completed
+
+- Installed Alembic.
+- Initialized an Alembic migration environment.
+- Added `alembic.ini`.
+- Added the `alembic/` folder with `env.py`, `script.py.mako`, and `versions/`.
+- Connected Alembic to the app’s `DATABASE_URL`.
+- Connected Alembic to SQLAlchemy’s `Base.metadata`.
+- Removed `Base.metadata.create_all()` from FastAPI startup.
+- Generated the first migration for the `items` table.
+- Applied the first migration to PostgreSQL with `alembic upgrade head`.
+- Added an optional `brand` column to `ItemModel`.
+- Updated Pydantic schemas, service logic, and tests for the new `brand` field.
+- Generated and applied a second migration to add `brand` to the existing `items` table.
+- Confirmed old rows had `brand = null`.
+- Confirmed new rows could store a real brand value.
+- Removed tracked `__pycache__` files from Git.
+
+### Why Alembic Was Added
+
+Before this phase, the app used:
+
+```python
+Base.metadata.create_all(bind=engine)
+```
+
+This created tables automatically when the app started.
+
+That was useful early on, but it is not ideal for a growing backend project.
+
+Problem:
+
+```txt
+Changing SQLAlchemy models does not safely update existing database tables.
+```
+
+Alembic solves this by making database schema changes explicit and versioned.
+
+Simple definition:
+
+```txt
+SQLAlchemy model = blueprint for the table
+PostgreSQL = real database storing the table
+Alembic migration = update patch that changes the database schema
+```
+
+### Migration Flow
+
+The professional migration flow is:
+
+```txt
+Change SQLAlchemy model
+  ↓
+Generate Alembic migration
+  ↓
+Review migration file
+  ↓
+Apply migration
+  ↓
+Database schema updates
+```
+
+Command to generate a migration:
+
+```bash
+uv run alembic revision --autogenerate -m "migration message"
+```
+
+Command to apply migrations:
+
+```bash
+uv run alembic upgrade head
+```
+
+`head` means the latest migration version.
+
+### First Migration
+
+The first migration created the `items` table.
+
+The migration contained an `upgrade()` function and a `downgrade()` function.
+
+```txt
+upgrade()   → apply the schema change
+downgrade() → undo the schema change
+```
+
+For the initial migration:
+
+```txt
+upgrade()   → create items table
+downgrade() → drop items table
+```
+
+After running:
+
+```bash
+uv run alembic upgrade head
+```
+
+PostgreSQL had the `items` table created through Alembic.
+
+This means Alembic became responsible for database schema management instead of FastAPI startup code.
+
+### `alembic_version`
+
+Alembic creates a table called:
+
+```txt
+alembic_version
+```
+
+This table stores the current migration revision applied to the database.
+
+It tells Alembic:
+
+```txt
+This database is currently at this schema version.
+```
+
+This prevents Alembic from rerunning migrations that were already applied.
+
+### Proving Schema Evolution
+
+To prove Alembic worked beyond the first migration, a new `brand` field was added to items.
+
+The model changed from:
+
+```txt
+id
+name
+category
+color
+size
+```
+
+to:
+
+```txt
+id
+name
+brand
+category
+color
+size
+```
+
+The new model field:
+
+```python
+brand: Mapped[str | None] = mapped_column(String(100), nullable=True)
+```
+
+The Pydantic schema was also updated:
+
+```python
+brand: str | None = None
+```
+
+The service layer was updated so create and update operations handle `brand`.
+
+### Why `brand` Was Nullable
+
+The `brand` column was added as nullable because old rows already existed in the database.
+
+If the new column had been added as:
+
+```python
+nullable=False
+```
+
+PostgreSQL would require every existing row to immediately have a brand value.
+
+But old rows did not have one yet.
+
+Using:
+
+```python
+nullable=True
+```
+
+allowed old rows to safely receive:
+
+```txt
+brand = NULL
+```
+
+This made the migration safe for existing data.
+
+### Result
+
+Old row:
+
+```json
+{
+  "name": "Never Content Anniversary RX-7 Shirt",
+  "brand": null,
+  "category": "Shirt",
+  "color": "Gray",
+  "size": "M"
+}
+```
+
+New row:
+
+```json
+{
+  "name": "Starfall Tour Shirt",
+  "brand": "Saturn LA",
+  "category": "Shirt",
+  "color": "White",
+  "size": "M"
+}
+```
+
+This confirmed:
+
+```txt
+Old items can keep brand as null.
+New items can store a brand value.
+The API returns the brand field.
+PostgreSQL has the new brand column.
+Alembic successfully evolved the existing schema.
+```
+
+### Docker Volume Lesson
+
+During migration setup, the local Docker PostgreSQL database was reset with:
+
+```bash
+docker compose down -v
+```
+
+Important distinction:
+
+```txt
+docker compose down
+  → stops containers but keeps database volume
+
+docker compose down -v
+  → stops containers and deletes the database volume
+```
+
+The `-v` flag removes the saved PostgreSQL data volume.
+
+That means local rows, tables, and database state are deleted.
+
+This is acceptable for local development resets, but it should be used carefully because it deletes database data.
+
+### Git Cleanup Lesson
+
+Some Python cache files were already tracked by Git.
+
+Even though `.gitignore` included:
+
+```gitignore
+__pycache__/
+*.pyc
+```
+
+Git still tracked cache files that had been committed earlier.
+
+Important rule:
+
+```txt
+.gitignore prevents new ignored files from being added.
+.gitignore does not automatically remove files that are already tracked.
+```
+
+Tracked cache files were removed with:
+
+```bash
+git rm --cached -r --ignore-unmatch app/__pycache__ app/models/__pycache__ app/schemas/__pycache__ app/services/__pycache__
+```
+
+After that, `.gitignore` prevents those files from being added again.
+
+### Phase 6A Status
+
+Phase 6A complete: Alembic is installed, configured, and managing the initial PostgreSQL schema.
+
+### Phase 6B Status
+
+Phase 6B complete: Alembic successfully updated an existing table by adding the optional `brand` column to items.
+
+---
+
 ## Core Notes
 
 ### `database.py`
@@ -734,6 +1027,17 @@ Simple definition:
 
 ```txt
 ItemModel = blueprint for the items table
+```
+
+Current fields:
+
+```txt
+id
+name
+brand
+category
+color
+size
 ```
 
 ### `get_db()`
@@ -850,6 +1154,7 @@ Example:
 
 ```python
 item.name = item_data.name
+item.brand = item_data.brand
 item.category = item_data.category
 item.color = item_data.color
 item.size = item_data.size
@@ -908,6 +1213,102 @@ id
 ```
 
 After `db.refresh(item)`, Python has the latest version of that object.
+
+### Alembic
+
+Alembic manages database schema changes over time.
+
+Simple definition:
+
+```txt
+Alembic = version control for database schema changes
+```
+
+It creates migration files that describe how the database should change.
+
+Example migration actions:
+
+```txt
+create table
+add column
+drop column
+create index
+add constraint
+```
+
+### Alembic Migration
+
+An Alembic migration is a versioned file that changes the database schema.
+
+Migration files live in:
+
+```txt
+alembic/versions/
+```
+
+Each migration has:
+
+```txt
+revision ID
+down_revision
+upgrade()
+downgrade()
+```
+
+Simple meaning:
+
+```txt
+upgrade()   → apply the database change
+downgrade() → undo the database change
+```
+
+### `alembic upgrade head`
+
+```bash
+uv run alembic upgrade head
+```
+
+Applies all pending migrations up to the latest migration.
+
+Simple definition:
+
+```txt
+alembic upgrade head = update the database to the latest schema version
+```
+
+### `alembic_version`
+
+`alembic_version` is a table created by Alembic.
+
+It stores the current migration version applied to the database.
+
+This lets Alembic know which migrations have already run.
+
+### Nullable Columns
+
+A nullable column allows a database value to be empty.
+
+In PostgreSQL, this empty value is:
+
+```txt
+NULL
+```
+
+For the `brand` field:
+
+```python
+brand: Mapped[str | None] = mapped_column(String(100), nullable=True)
+```
+
+This means:
+
+```txt
+brand can be a string
+or
+brand can be None / NULL
+```
+
+This was important because old rows already existed before the `brand` column was added.
 
 ### `TestClient`
 
@@ -1073,6 +1474,27 @@ Simple definition:
 Volume = persistent storage for container data
 ```
 
+### `docker compose down` vs `docker compose down -v`
+
+```bash
+docker compose down
+```
+
+Stops and removes containers, but keeps the database volume.
+
+```bash
+docker compose down -v
+```
+
+Stops and removes containers and deletes the database volume.
+
+Important rule:
+
+```txt
+Use docker compose down for normal shutdowns.
+Use docker compose down -v only when intentionally resetting local database data.
+```
+
 ### Docker Network
 
 Docker Compose creates a network so services can talk to each other.
@@ -1147,6 +1569,10 @@ The project also has an application configuration layer, which allows the databa
 
 The project can now run through Docker Compose with both the FastAPI API and PostgreSQL database as separate containers.
 
+The project now uses Alembic for database migrations, which means schema changes are versioned, explicit, and applied intentionally instead of being created automatically on app startup.
+
+The project successfully proved schema evolution by adding an optional `brand` column to the existing `items` table.
+
 Current Docker architecture:
 
 ```txt
@@ -1171,6 +1597,8 @@ The most important system design lesson so far is that backend systems are made 
 FastAPI handles the API behavior.
 
 PostgreSQL stores the data.
+
+Alembic manages database schema changes.
 
 Docker Compose runs the services together in a reproducible local environment.
 

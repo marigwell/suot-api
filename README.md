@@ -2,7 +2,7 @@
 
 Suot API is a backend engineering project for building a fashion inventory and recommendation system.
 
-The goal of this project is to deeply understand backend API development, including REST design, service-layer architecture, database persistence, automated testing, application configuration, Docker, PostgreSQL, authentication, and recommendation logic.
+The goal of this project is to deeply understand backend API development, including REST design, service-layer architecture, database persistence, automated testing, application configuration, Docker, PostgreSQL, Alembic migrations, authentication, and recommendation logic.
 
 ## Tech Stack
 
@@ -13,6 +13,7 @@ The goal of this project is to deeply understand backend API development, includ
 - SQLAlchemy
 - SQLite
 - PostgreSQL
+- Alembic
 - Docker
 - Docker Compose
 - uv
@@ -24,6 +25,7 @@ The goal of this project is to deeply understand backend API development, includ
 
 - Health check endpoint
 - Item CRUD endpoints
+- Optional `brand` field on items
 - SQLite persistence with SQLAlchemy
 - PostgreSQL support
 - Dockerized FastAPI API service
@@ -36,6 +38,10 @@ The goal of this project is to deeply understand backend API development, includ
 - Automated API tests with pytest
 - Isolated test database
 - FastAPI Swagger/OpenAPI documentation
+- Alembic database migrations
+- Versioned database schema changes
+- Initial migration for the `items` table`
+- Schema migration for adding `brand` to items
 
 ## API Endpoints
 
@@ -133,6 +139,48 @@ localhost → used when the API runs on the laptop
 db        → used when the API runs inside Docker Compose
 ```
 
+## Database Migrations
+
+Suot API uses Alembic to manage database schema changes.
+
+Before Alembic, the app used SQLAlchemy’s `Base.metadata.create_all()` to create tables automatically when the API started.
+
+That was useful for learning, but it is not ideal for a growing backend project because schema changes should be explicit, versioned, and reviewable.
+
+Current migration flow:
+
+```txt
+Change SQLAlchemy model
+  ↓
+Generate Alembic migration
+  ↓
+Review migration file
+  ↓
+Apply migration
+  ↓
+PostgreSQL schema updates
+```
+
+Create a migration:
+
+```bash
+uv run alembic revision --autogenerate -m "migration message"
+```
+
+Apply migrations:
+
+```bash
+uv run alembic upgrade head
+```
+
+Check the current migration version in PostgreSQL:
+
+```sql
+SELECT * FROM alembic_version;
+```
+
+Alembic now manages the structure of the PostgreSQL database, including tables, columns, constraints, and schema changes over time.
+
 ## Project Structure
 
 ```txt
@@ -145,6 +193,13 @@ app/
 ├── services/
 └── models/
 
+alembic/
+├── env.py
+├── script.py.mako
+└── versions/
+    ├── <revision>_create_items_table.py
+    └── <revision>_add_brand_to_items.py
+
 tests/
 └── test_items.py
 
@@ -152,6 +207,7 @@ Dockerfile
 .dockerignore
 docker-compose.yml
 .env.example
+alembic.ini
 pyproject.toml
 README.md
 DEVLOG.md
@@ -209,10 +265,38 @@ Check running containers:
 docker compose ps
 ```
 
+Run database migrations:
+
+```bash
+uv run alembic upgrade head
+```
+
+The PostgreSQL database should be running before applying migrations:
+
+```bash
+docker compose up -d db
+```
+
 Stop the containers:
 
 ```bash
 docker compose down
+```
+
+Reset the local PostgreSQL database volume only when intentionally starting fresh:
+
+```bash
+docker compose down -v
+```
+
+Important:
+
+```txt
+docker compose down
+  → stops containers but keeps database data
+
+docker compose down -v
+  → stops containers and deletes the database volume
 ```
 
 ## Testing
@@ -310,6 +394,8 @@ git push
 ```txt
 feature/postgres-setup
 feature/dockerize-api
+feature/alembic-migrations
+feature/add-item-brand
 feature/auth
 feature/user-inventory
 feature/recommendations
@@ -325,6 +411,7 @@ Use main for stable checkpoints.
 Use feature branches for meaningful changes.
 Do not commit .env files.
 Do not commit local database files.
+Do not commit Python cache files.
 Run tests before committing.
 Test Docker changes with docker compose ps and Swagger.
 Merge only after the feature works.
@@ -338,7 +425,8 @@ Merge only after the feature works.
 - Phase 4A: Environment-based app configuration — DONE
 - Phase 4B: Local PostgreSQL setup with Docker — DONE
 - Phase 5: Dockerize the FastAPI API — DONE
-- Phase 6: Alembic migrations
+- Phase 6A: Alembic setup and initial migration — DONE
+- Phase 6B: Schema evolution with `brand` field — DONE
 - Phase 7: Authentication
 - Phase 8: User-owned inventory
 - Phase 9: Recommendation logic
@@ -362,9 +450,14 @@ database persistence
 test isolation
 environment configuration
 PostgreSQL
+Alembic migrations
+schema evolution
+database versioning
+nullable columns
 Docker images
 Docker containers
 Docker Compose services
+Docker volumes
 Git branching
 local infrastructure with Docker
 ```
