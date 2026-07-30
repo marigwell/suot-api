@@ -12,6 +12,7 @@ env/
 .env
 .env.*
 !.env.example
+!.env.docker.example
 
 # SQLite local dbs
 *.db

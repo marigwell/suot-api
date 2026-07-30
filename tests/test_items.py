@@ -43,6 +43,7 @@ def test_create_item():
         "/items",
         json={
             "name": "Carbon Core - Lucy Racing Jacket",
+            "brand": "Carbon Core",
             "category": "Jacket",
             "color": "Black",
             "size": "M",
@@ -54,6 +55,7 @@ def test_create_item():
     data = response.json()
 
     assert data["name"] == "Carbon Core - Lucy Racing Jacket"
+    assert data["brand"] == "Carbon Core"
     assert data["category"] == "Jacket"
     assert data["color"] == "Black"
     assert data["size"] == "M"
@@ -130,6 +132,7 @@ def test_update_item():
         "/items",
         json={
             "name": "UNIQLO Boxy Cropped Tee",
+            "brand": "UNIQLO",
             "category": "T-Shirt",
             "color": "Green",
             "size": "XL"
@@ -142,6 +145,7 @@ def test_update_item():
         f"/items/{item_id}",
         json={
             "name": "UNIQLO Boxy Cropped Tee",
+            "brand": "UNIQLO",
             "category": "T-Shirt",
             "color": "Blue",
             "size": "XS"
@@ -154,6 +158,7 @@ def test_update_item():
 
     assert data["id"] == item_id
     assert data["name"] == "UNIQLO Boxy Cropped Tee"
+    assert data["brand"] == "UNIQLO"
     assert data["category"] == "T-Shirt"
     assert data["color"] == "Blue"
     assert data["size"] == "XS"

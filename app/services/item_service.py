@@ -20,6 +20,7 @@ def get_item_by_id(db: Session, item_id: int) -> ItemModel | None:
 def create_item(db: Session, item_data: ItemCreate) -> ItemModel:
     item = ItemModel(
         name=item_data.name,
+        brand=item_data.brand,
         category=item_data.category,
         color=item_data.color,
         size=item_data.size,
@@ -43,6 +44,7 @@ def update_item(
         return None
 
     item.name = item_data.name
+    item.brand = item_data.brand
     item.category = item_data.category
     item.color = item_data.color
     item.size = item_data.size

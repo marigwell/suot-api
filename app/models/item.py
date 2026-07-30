@@ -10,6 +10,7 @@ class ItemModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+    brand: Mapped[str] = mapped_column(String(100), nullable=True)
     category: Mapped[str] = mapped_column(String(100), nullable=False)
     color: Mapped[str] = mapped_column(String(100), nullable=False)
     size: Mapped[str] = mapped_column(String(50), nullable=False)
