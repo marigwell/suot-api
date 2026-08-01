@@ -679,13 +679,13 @@ docker compose ps shows:
 - suot-postgres running
 ```
 
-http://localhost:8000/docs opens Swagger UI
+http://localhost:8000/docs opens Swagger UI.
 
-POST /items works through the Dockerized API
+POST /items works through the Dockerized API.
 
-GET /items returns data from PostgreSQL
+GET /items returns data from PostgreSQL.
 
-PostgreSQL stores the item rows inside the Dockerized database service
+PostgreSQL stores the item rows inside the Dockerized database service.
 
 ### Phase 4B Status
 
@@ -990,6 +990,443 @@ Phase 6B complete: Alembic successfully updated an existing table by adding the 
 
 ---
 
+## Day 8 — User Model, Users Table, and Registration
+
+### Goal
+
+Start the authentication foundation by creating a user database model, adding a users table, and implementing user registration with password hashing.
+
+This phase does not include login or JWT access tokens yet.
+
+The focus is:
+
+```txt
+Create user accounts safely.
+Store password hashes, not raw passwords.
+Return safe user responses.
+Prepare the backend for login and protected routes later.
+```
+
+### Work Completed
+
+- Created `app/models/user.py`.
+- Added `UserModel` as the SQLAlchemy model for the `users` table.
+- Added `email`, `username`, `hashed_password`, `is_active`, `created_at`, and `updated_at` fields.
+- Added `username` for future searchable public profiles.
+- Created `app/schemas/user.py`.
+- Added user request and response schemas.
+- Installed `email-validator` for Pydantic `EmailStr`.
+- Updated Alembic to import `UserModel`.
+- Generated and applied a migration for the `users` table.
+- Installed `pwdlib[argon2]` for password hashing.
+- Created `app/security.py`.
+- Added `hash_password()` and `verify_password()` helper functions.
+- Created `app/services/user_service.py`.
+- Added user lookup helpers by email and username.
+- Added user creation logic.
+- Created `app/routers/auth.py`.
+- Added `POST /auth/register`.
+- Updated `app/main.py` to include the auth router.
+- Tested registration through Swagger.
+- Confirmed registered users receive a safe response without `password` or `hashed_password`.
+- Added registration tests for successful registration, duplicate email, and duplicate username.
+
+### User Table Design
+
+The `users` table stores account identity data.
+
+Current fields:
+
+```txt
+users
+├── id
+├── email
+├── username
+├── hashed_password
+├── is_active
+├── created_at
+└── updated_at
+```
+
+### Why Email and Username Are Separate
+
+Email and username have different purposes.
+
+```txt
+email
+  → private login identifier
+
+username
+  → public/searchable identity for future profile features
+```
+
+A user might log in with an email address, but other users should search for public profiles by username.
+
+Important rule:
+
+```txt
+Do not expose email publicly in future public profile endpoints.
+```
+
+A future public profile response should look more like:
+
+```json
+{
+  "id": 1,
+  "username": "jim"
+}
+```
+
+not:
+
+```json
+{
+  "id": 1,
+  "email": "jim@example.com",
+  "username": "jim"
+}
+```
+
+### User Schemas
+
+User schemas define what the client can send and what the API can return.
+
+Important distinction:
+
+```txt
+models/user.py
+  → database table shape
+
+schemas/user.py
+  → API request and response shape
+```
+
+Current schemas:
+
+```txt
+UserCreate
+  → registration request
+  → email, username, password
+
+UserLogin
+  → future login request
+  → email, password
+
+User
+  → safe private user response
+  → id, email, username, is_active, created_at, updated_at
+
+UserPublic
+  → future public profile response
+  → id, username
+```
+
+### Request Schema vs Response Schema Lesson
+
+A registration request needs a password.
+
+```python
+class UserCreate(BaseModel):
+    email: EmailStr
+    username: str
+    password: str
+```
+
+But the response should not include a password.
+
+This was an important bug caught during testing.
+
+The incorrect version was:
+
+```python
+class User(UserCreate):
+    ...
+```
+
+That caused `User` to inherit the `password` field from `UserCreate`.
+
+FastAPI then expected the response to include a password and raised a response validation error.
+
+Correct design:
+
+```python
+class User(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: EmailStr
+    username: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+```
+
+Important rule:
+
+```txt
+Do not make response schemas inherit from request schemas that contain secrets.
+```
+
+### Password Hashing
+
+The backend should never store raw passwords.
+
+Bad:
+
+```txt
+password = "password123"
+```
+
+Good:
+
+```txt
+hashed_password = "argon2_hash_here"
+```
+
+The registration flow receives the raw password temporarily, hashes it, and stores only the hash.
+
+```txt
+raw password
+  ↓
+hash_password()
+  ↓
+hashed_password
+  ↓
+users table
+```
+
+The project currently uses `pwdlib[argon2]` for password hashing.
+
+### `security.py`
+
+`security.py` contains low-level security helper functions.
+
+Current functions:
+
+```txt
+hash_password(password)
+verify_password(plain_password, hashed_password)
+```
+
+Responsibilities:
+
+```txt
+hash_password()
+  → convert raw password into password hash
+
+verify_password()
+  → compare login password against stored password hash
+```
+
+Registration currently uses `hash_password()`.
+
+Login later will use `verify_password()`.
+
+### User Service Layer
+
+`user_service.py` contains user-related database logic.
+
+Current responsibilities:
+
+```txt
+normalize_email()
+normalize_username()
+get_user_by_email()
+get_user_by_username()
+create_user()
+```
+
+This keeps database and business logic out of the router.
+
+Clean separation:
+
+```txt
+auth.py router
+  → HTTP concerns
+
+user_service.py
+  → user database/business logic
+
+security.py
+  → password hashing and verification
+```
+
+### Registration Flow
+
+Current endpoint:
+
+```http
+POST /auth/register
+```
+
+Request body:
+
+```json
+{
+  "email": "jim@example.com",
+  "username": "jim",
+  "password": "password123"
+}
+```
+
+Registration flow:
+
+```txt
+POST /auth/register
+  ↓
+Client sends email, username, and password
+  ↓
+Pydantic validates the request body
+  ↓
+Auth router receives UserCreate
+  ↓
+User service checks whether email already exists
+  ↓
+User service checks whether username already exists
+  ↓
+Password is hashed
+  ↓
+UserModel is created with hashed_password
+  ↓
+SQLAlchemy saves the user row
+  ↓
+API returns safe User response
+```
+
+Successful response:
+
+```json
+{
+  "id": 1,
+  "email": "jim@example.com",
+  "username": "jim",
+  "is_active": true,
+  "created_at": "2026-08-01T05:12:13.071212Z",
+  "updated_at": "2026-08-01T05:12:13.071222Z"
+}
+```
+
+The response does not include:
+
+```txt
+password
+hashed_password
+```
+
+### Duplicate Account Validation
+
+If a user registers with an email that already exists, the API returns:
+
+```http
+409 Conflict
+```
+
+Response:
+
+```json
+{
+  "detail": "Email already registered"
+}
+```
+
+If a user registers with a username that already exists, the API returns:
+
+```http
+409 Conflict
+```
+
+Response:
+
+```json
+{
+  "detail": "Username already taken"
+}
+```
+
+This prevents duplicate accounts from sharing the same login email or public username.
+
+### Why `409 Conflict` Was Used
+
+`409 Conflict` means the request is valid, but it conflicts with existing server state.
+
+In this case:
+
+```txt
+The email is valid,
+but another user already owns it.
+
+The username is valid,
+but another user already owns it.
+```
+
+So `409 Conflict` is more accurate than `400 Bad Request`.
+
+### Registration Test Coverage
+
+Added tests for:
+
+```txt
+POST /auth/register
+  → creates a user successfully
+
+POST /auth/register with duplicate email
+  → returns 409 Conflict
+
+POST /auth/register with duplicate username
+  → returns 409 Conflict
+```
+
+Tests also verify that the response does not expose:
+
+```txt
+password
+hashed_password
+```
+
+### Phase 7A Status
+
+Phase 7A complete: the user model, user schemas, and users table migration are complete.
+
+### Phase 7B Status
+
+Phase 7B complete: user registration works with password hashing, duplicate email validation, duplicate username validation, and safe response schemas.
+
+### Next Planned Phase
+
+Next phase:
+
+```txt
+Phase 7C — Login and JWT access tokens
+```
+
+Planned flow:
+
+```txt
+POST /auth/login
+  ↓
+Client sends email and password
+  ↓
+Backend finds user by email
+  ↓
+Backend verifies password against hashed_password
+  ↓
+Backend creates JWT access token
+  ↓
+API returns token
+```
+
+After that:
+
+```txt
+GET /auth/me
+  → return current authenticated user
+
+Protected item routes
+  → only allow users to access their own items
+```
+
+---
+
 ## Core Notes
 
 ### `database.py`
@@ -1038,6 +1475,40 @@ brand
 category
 color
 size
+```
+
+### `UserModel`
+
+`UserModel` is the SQLAlchemy model that defines how a user account is represented in the database.
+
+It maps:
+
+```txt
+Python class UserModel
+```
+
+to:
+
+```txt
+SQL table users
+```
+
+Simple definition:
+
+```txt
+UserModel = blueprint for the users table
+```
+
+Current fields:
+
+```txt
+id
+email
+username
+hashed_password
+is_active
+created_at
+updated_at
 ```
 
 ### `get_db()`
@@ -1115,27 +1586,33 @@ select(ItemModel).where(ItemModel.category == "jacket")
 
 This would select only items where the category is `"jacket"`.
 
-### `db.scalars()`
+### `db.scalar()` vs `db.scalars()`
+
+```python
+db.scalar(statement)
+```
+
+Executes a SELECT statement and returns one scalar result.
+
+This is useful for queries where only one row is expected.
+
+Example use:
+
+```txt
+Find one user by email.
+Find one user by username.
+```
 
 ```python
 db.scalars(statement)
 ```
 
-Executes a SELECT statement and returns the model objects from the result.
+Executes a SELECT statement and returns multiple model objects from the result.
 
-Full pattern:
-
-```python
-list(db.scalars(select(ItemModel)).all())
-```
-
-Meaning:
+Example use:
 
 ```txt
-Build query
-Run query
-Get all ItemModel objects
-Convert result into a Python list
+List all items.
 ```
 
 ### `db.add()`
@@ -1196,6 +1673,7 @@ Pending changes can include:
 new item inserted
 existing item updated
 item deleted
+new user inserted
 ```
 
 ### `db.refresh()`
@@ -1206,10 +1684,12 @@ db.refresh(item)
 
 Reloads the Python object from the database.
 
-This is useful after creating a new item because the database generates values like:
+This is useful after creating a new item or user because the database generates values like:
 
 ```txt
 id
+created_at
+updated_at
 ```
 
 After `db.refresh(item)`, Python has the latest version of that object.
@@ -1310,6 +1790,118 @@ brand can be None / NULL
 
 This was important because old rows already existed before the `brand` column was added.
 
+### Request Schemas vs Response Schemas
+
+Request schemas define what the client can send.
+
+Response schemas define what the API is allowed to return.
+
+Example:
+
+```txt
+UserCreate
+  → request schema
+  → contains email, username, password
+
+User
+  → response schema
+  → contains id, email, username, is_active, created_at, updated_at
+```
+
+Important rule:
+
+```txt
+Secrets can exist in request schemas when needed.
+Secrets should not exist in response schemas.
+```
+
+This prevents the API from accidentally returning passwords or password hashes.
+
+### Password Hashing
+
+Password hashing turns a raw password into a one-way stored value.
+
+Simple flow:
+
+```txt
+Raw password
+  ↓
+hash_password()
+  ↓
+hashed_password stored in database
+```
+
+The backend should never store raw passwords.
+
+Later, login will use:
+
+```txt
+Raw login password
+  ↓
+verify_password(plain_password, hashed_password)
+  ↓
+true or false
+```
+
+### `security.py`
+
+`security.py` contains low-level security helper functions.
+
+Current functions:
+
+```txt
+hash_password()
+verify_password()
+```
+
+It does not decide whether a user should be created.
+
+It only handles password hashing and password verification.
+
+### `user_service.py`
+
+`user_service.py` contains user-related business and database logic.
+
+Current responsibilities:
+
+```txt
+normalize_email()
+normalize_username()
+get_user_by_email()
+get_user_by_username()
+create_user()
+```
+
+It checks existing users, normalizes inputs, hashes the password through `security.py`, and creates the user row.
+
+### `auth.py`
+
+`auth.py` is the router for authentication-related HTTP endpoints.
+
+Current endpoint:
+
+```http
+POST /auth/register
+```
+
+Future endpoints:
+
+```http
+POST /auth/login
+GET /auth/me
+```
+
+### `409 Conflict`
+
+`409 Conflict` means the request is valid, but it conflicts with existing server state.
+
+Current uses:
+
+```txt
+Email already registered
+Username already taken
+```
+
 ### `TestClient`
 
 `TestClient` allows pytest to call the FastAPI app without manually running the server.
@@ -1324,6 +1916,7 @@ This lets tests make requests like:
 
 ```python
 client.post("/items", json={...})
+client.post("/auth/register", json={...})
 client.get("/items")
 client.put("/items/1", json={...})
 client.delete("/items/1")
@@ -1553,7 +2146,13 @@ The router handles HTTP concerns.
 
 The service handles item logic.
 
-The SQLAlchemy model defines the database table.
+The auth router handles registration and future login/auth endpoints.
+
+The item service handles item CRUD logic.
+
+The user service handles user lookup, duplicate account checks, password hashing, and user creation.
+
+The SQLAlchemy models define database tables.
 
 The database session handles communication with the database.
 
@@ -1563,15 +2162,17 @@ The project moved from temporary in-memory storage to persistent SQLite storage.
 
 The project then moved from SQLite to PostgreSQL running as a separate Docker service.
 
-The project now has automated tests for item CRUD endpoints, which means the API behavior can be verified with pytest instead of only through manual Swagger testing.
+The project now has automated tests for item CRUD endpoints and user registration behavior.
 
 The project also has an application configuration layer, which allows the database backend to change through `DATABASE_URL` without rewriting the router or service layer.
 
-The project can now run through Docker Compose with both the FastAPI API and PostgreSQL database as separate containers.
+The project can run through Docker Compose with both the FastAPI API and PostgreSQL database as separate containers.
 
-The project now uses Alembic for database migrations, which means schema changes are versioned, explicit, and applied intentionally instead of being created automatically on app startup.
+The project uses Alembic for database migrations, which means schema changes are versioned, explicit, and applied intentionally instead of being created automatically on app startup.
 
 The project successfully proved schema evolution by adding an optional `brand` column to the existing `items` table.
+
+The project now has a `users` table and can register users safely by hashing passwords and returning safe user responses.
 
 Current Docker architecture:
 
@@ -1600,6 +2201,32 @@ PostgreSQL stores the data.
 
 Alembic manages database schema changes.
 
+SQLAlchemy maps Python models to database tables.
+
+Pydantic controls request and response shapes.
+
 Docker Compose runs the services together in a reproducible local environment.
 
 Git branches keep major changes isolated until they are tested and ready to merge.
+
+The next major backend concept is login and token-based authentication:
+
+```txt
+POST /auth/login
+  ↓
+verify email and password
+  ↓
+create JWT access token
+  ↓
+client sends token on protected requests
+```
+
+After login works, the next major authorization step is user-owned inventory:
+
+```txt
+items.user_id
+  ↓
+current_user.id
+  ↓
+users can only access their own items
+```

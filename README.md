@@ -2,7 +2,7 @@
 
 Suot API is a backend engineering project for building a fashion inventory and recommendation system.
 
-The goal of this project is to deeply understand backend API development, including REST design, service-layer architecture, database persistence, automated testing, application configuration, Docker, PostgreSQL, Alembic migrations, authentication, and recommendation logic.
+The goal of this project is to deeply understand backend API development, including REST design, service-layer architecture, database persistence, automated testing, application configuration, Docker, PostgreSQL, Alembic migrations, authentication, user-owned data, and recommendation logic.
 
 ## Tech Stack
 
@@ -20,12 +20,21 @@ The goal of this project is to deeply understand backend API development, includ
 - pytest
 - ruff
 - Git
+- email-validator
+- pwdlib / Argon2 password hashing
 
 ## Current Features
 
 - Health check endpoint
 - Item CRUD endpoints
 - Optional `brand` field on items
+- User database model
+- User request and response schemas
+- User registration endpoint
+- Password hashing for registered users
+- Duplicate email validation
+- Duplicate username validation
+- Safe user responses that do not expose passwords or password hashes
 - SQLite persistence with SQLAlchemy
 - PostgreSQL support
 - Dockerized FastAPI API service
@@ -40,8 +49,9 @@ The goal of this project is to deeply understand backend API development, includ
 - FastAPI Swagger/OpenAPI documentation
 - Alembic database migrations
 - Versioned database schema changes
-- Initial migration for the `items` table`
+- Initial migration for the `items` table
 - Schema migration for adding `brand` to items
+- Schema migration for creating the `users` table
 
 ## API Endpoints
 
@@ -49,6 +59,42 @@ The goal of this project is to deeply understand backend API development, includ
 
 ```http
 GET /health
+```
+
+### Auth
+
+```http
+POST /auth/register
+```
+
+Current registration request body:
+
+```json
+{
+  "email": "jim@example.com",
+  "username": "jim",
+  "password": "password123"
+}
+```
+
+Current registration response body:
+
+```json
+{
+  "id": 1,
+  "email": "jim@example.com",
+  "username": "jim",
+  "is_active": true,
+  "created_at": "2026-08-01T05:12:13.071212Z",
+  "updated_at": "2026-08-01T05:12:13.071222Z"
+}
+```
+
+The API does not return:
+
+```txt
+password
+hashed_password
 ```
 
 ### Items
@@ -79,9 +125,82 @@ SQLAlchemy Session
 PostgreSQL database
 ```
 
+## Current Auth Registration Flow
+
+```txt
+POST /auth/register
+  ↓
+Client sends email, username, and password
+  ↓
+Pydantic validates the request body
+  ↓
+Auth router receives the request
+  ↓
+User service checks for duplicate email
+  ↓
+User service checks for duplicate username
+  ↓
+Password is hashed with Argon2
+  ↓
+UserModel is created with hashed_password
+  ↓
+SQLAlchemy saves the user row
+  ↓
+API returns a safe User response
+```
+
+Important rule:
+
+```txt
+The client sends a raw password during registration.
+The backend never stores the raw password.
+The backend stores only hashed_password.
+The API never returns password or hashed_password.
+```
+
+## Database Design
+
+### `items`
+
+```txt
+items
+├── id
+├── name
+├── brand
+├── category
+├── color
+└── size
+```
+
+### `users`
+
+```txt
+users
+├── id
+├── email
+├── username
+├── hashed_password
+├── is_active
+├── created_at
+└── updated_at
+```
+
+Current design distinction:
+
+```txt
+email
+  → private login identifier
+
+username
+  → public/searchable identity for future profile features
+
+hashed_password
+  → stored password hash, never plaintext password
+```
+
 ## Docker Architecture
 
-The application can now run with Docker Compose.
+The application can run with Docker Compose.
 
 ```txt
 Docker Compose
@@ -91,7 +210,7 @@ Docker Compose
 │
 └── db
     └── PostgreSQL database
-        └── stores item data
+        └── stores application data
 ```
 
 The API and database run as separate services.
@@ -108,7 +227,7 @@ db container
 PostgreSQL
 ```
 
-This means Suot can now run locally as a containerized backend system.
+This means Suot can run locally as a containerized backend system.
 
 ## Database Configuration
 
@@ -135,7 +254,7 @@ DATABASE_URL=postgresql+psycopg://suot:suot@db:5432/suot
 Important distinction:
 
 ```txt
-localhost → used when the API runs on the laptop
+localhost → used when the API or Alembic runs from the laptop
 db        → used when the API runs inside Docker Compose
 ```
 
@@ -179,7 +298,13 @@ Check the current migration version in PostgreSQL:
 SELECT * FROM alembic_version;
 ```
 
-Alembic now manages the structure of the PostgreSQL database, including tables, columns, constraints, and schema changes over time.
+Alembic currently manages schema changes for:
+
+```txt
+items table creation
+brand column added to items
+users table creation
+```
 
 ## Project Structure
 
@@ -188,19 +313,31 @@ app/
 ├── main.py
 ├── config.py
 ├── database.py
+├── security.py
 ├── routers/
+│   ├── auth.py
+│   ├── health.py
+│   └── items.py
 ├── schemas/
+│   ├── item.py
+│   └── user.py
 ├── services/
+│   ├── item_service.py
+│   └── user_service.py
 └── models/
+    ├── item.py
+    └── user.py
 
 alembic/
 ├── env.py
 ├── script.py.mako
 └── versions/
     ├── <revision>_create_items_table.py
-    └── <revision>_add_brand_to_items.py
+    ├── <revision>_add_brand_to_items.py
+    └── <revision>_create_users_table.py
 
 tests/
+├── test_auth.py
 └── test_items.py
 
 Dockerfile
@@ -211,6 +348,7 @@ alembic.ini
 pyproject.toml
 README.md
 DEVLOG.md
+uv.lock
 ```
 
 ## Running Locally Without Docker
@@ -247,6 +385,18 @@ uv run pytest
 
 ## Running with Docker Compose
 
+Start the PostgreSQL database:
+
+```bash
+docker compose up -d db
+```
+
+Run database migrations:
+
+```bash
+uv run alembic upgrade head
+```
+
 Start the API and PostgreSQL database:
 
 ```bash
@@ -263,18 +413,6 @@ Check running containers:
 
 ```bash
 docker compose ps
-```
-
-Run database migrations:
-
-```bash
-uv run alembic upgrade head
-```
-
-The PostgreSQL database should be running before applying migrations:
-
-```bash
-docker compose up -d db
 ```
 
 Stop the containers:
@@ -328,6 +466,10 @@ PUT    /items/{item_id}
 PUT    /items/999
 DELETE /items/{item_id}
 DELETE /items/999
+
+POST   /auth/register
+POST   /auth/register duplicate email
+POST   /auth/register duplicate username
 ```
 
 ## Git Workflow
@@ -396,6 +538,9 @@ feature/postgres-setup
 feature/dockerize-api
 feature/alembic-migrations
 feature/add-item-brand
+feature/user-model
+feature/user-registration
+feature/user-login
 feature/auth
 feature/user-inventory
 feature/recommendations
@@ -427,10 +572,13 @@ Merge only after the feature works.
 - Phase 5: Dockerize the FastAPI API — DONE
 - Phase 6A: Alembic setup and initial migration — DONE
 - Phase 6B: Schema evolution with `brand` field — DONE
-- Phase 7: Authentication
-- Phase 8: User-owned inventory
-- Phase 9: Recommendation logic
-- Phase 10: Deployment
+- Phase 7A: User model and users table migration — DONE
+- Phase 7B: User registration — DONE
+- Phase 7C: Login and JWT access tokens
+- Phase 7D: Protected auth route with `/auth/me`
+- Phase 7E: User-owned item inventory
+- Phase 8: Recommendation logic
+- Phase 9: Deployment
 
 ## Learning Goals
 
@@ -460,4 +608,55 @@ Docker Compose services
 Docker volumes
 Git branching
 local infrastructure with Docker
+password hashing
+safe response schemas
+duplicate account validation
+authentication design
+```
+
+## Current Auth Roadmap
+
+Current completed auth foundation:
+
+```txt
+UserModel
+User schemas
+users table migration
+password hashing helper
+POST /auth/register
+registration tests
+```
+
+Next planned auth features:
+
+```txt
+POST /auth/login
+  → verify email and password
+  → return JWT access token
+
+GET /auth/me
+  → verify JWT
+  → return current authenticated user
+
+Protected item routes
+  → require valid JWT
+  → only return items owned by current_user.id
+```
+
+The long-term authentication design is:
+
+```txt
+Authentication
+  → Who are you?
+
+Authorization
+  → What data are you allowed to access?
+```
+
+For Suot, that means:
+
+```txt
+JWT identifies the current user.
+user_id scopes item access.
+Users should only read, update, and delete their own items.
 ```
