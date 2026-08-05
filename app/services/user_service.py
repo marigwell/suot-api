@@ -5,6 +5,8 @@ from app.models.user import UserModel
 from app.schemas.user import UserCreate
 from app.security import hash_password
 
+from app.security import hash_password, verify_password
+
 def normalize_email(email: str) -> str:
     return email.strip().lower()
 
@@ -34,4 +36,14 @@ def create_user(db: Session, user_data: UserCreate) -> UserModel:
     db.commit()
     db.refresh(user)
 
+    return user
+
+def authenticate_user(db: Session, email: str, password: str) -> UserModel | None:
+    user = get_user_by_email(db, email)
+    if user is None:
+        return None
+
+    if not verify_password(password, user.hashed_password):
+        return None
+    
     return user
