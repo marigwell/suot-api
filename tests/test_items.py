@@ -20,6 +20,7 @@ TestingSessionLocal = sessionmaker(
     expire_on_commit=False,
 )
 
+
 def override_get_db() -> Generator[Session, None, None]:
     db = TestingSessionLocal()
     try:
@@ -27,13 +28,16 @@ def override_get_db() -> Generator[Session, None, None]:
     finally:
         db.close()
 
+
 app.dependency_overrides[get_db] = override_get_db
 
 client = TestClient(app)
 
+
 def setup_function():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+
 
 def test_create_item():
     """
@@ -47,7 +51,7 @@ def test_create_item():
             "category": "Jacket",
             "color": "Black",
             "size": "M",
-        }
+        },
     )
 
     assert response.status_code == 200
@@ -61,6 +65,7 @@ def test_create_item():
     assert data["size"] == "M"
     assert "id" in data
 
+
 def test_get_items():
     """
     Tests retrieving all items
@@ -71,8 +76,8 @@ def test_get_items():
             "name": "Saturn Los Angeles Pleated Trousers",
             "category": "Pants",
             "color": "Gray",
-            "size": "S"
-        }
+            "size": "S",
+        },
     )
 
     response = client.get("/items")
@@ -87,6 +92,7 @@ def test_get_items():
     assert data[0]["color"] == "Gray"
     assert data[0]["size"] == "S"
 
+
 def test_get_item_by_id():
     """
     Tests retrieving a single item by its ID
@@ -97,8 +103,8 @@ def test_get_item_by_id():
             "name": "UNIQLO Boxy Cropped Tee",
             "category": "T-Shirt",
             "color": "Green",
-            "size": "XL"
-        }
+            "size": "XL",
+        },
     )
 
     item_id = create_response.json()["id"]
@@ -115,6 +121,7 @@ def test_get_item_by_id():
     assert data["color"] == "Green"
     assert data["size"] == "XL"
 
+
 def test_get_item_not_found():
     """
     Tests retrieving a non-existent item
@@ -123,6 +130,7 @@ def test_get_item_not_found():
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Item not found"}
+
 
 def test_update_item():
     """
@@ -135,8 +143,8 @@ def test_update_item():
             "brand": "UNIQLO",
             "category": "T-Shirt",
             "color": "Green",
-            "size": "XL"
-        }
+            "size": "XL",
+        },
     )
 
     item_id = create_response.json()["id"]
@@ -148,8 +156,8 @@ def test_update_item():
             "brand": "UNIQLO",
             "category": "T-Shirt",
             "color": "Blue",
-            "size": "XS"
-        }
+            "size": "XS",
+        },
     )
 
     assert response.status_code == 200
@@ -163,6 +171,7 @@ def test_update_item():
     assert data["color"] == "Blue"
     assert data["size"] == "XS"
 
+
 def test_update_item_not_found():
     """
     Tests updating a non-existent item
@@ -173,12 +182,13 @@ def test_update_item_not_found():
             "name": "Fake Item",
             "category": "T-Shirt",
             "color": "Indigo",
-            "size": "XS"
-        }
+            "size": "XS",
+        },
     )
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Item not found"}
+
 
 def test_delete_item():
     """
@@ -190,8 +200,8 @@ def test_delete_item():
             "name": "New Balance 9060",
             "category": "Shoes",
             "color": "White",
-            "size": "8.5"
-        }
+            "size": "8.5",
+        },
     )
 
     item_id = create_response.json()["id"]
@@ -203,6 +213,7 @@ def test_delete_item():
 
     get_response = client.get(f"/items/{item_id}")
     assert get_response.status_code == 404
+
 
 def test_delete_item_not_found():
     """

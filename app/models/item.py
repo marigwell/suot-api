@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
+
 class ItemModel(Base):
     __tablename__ = "items"
 

@@ -29,12 +29,14 @@ def list_items(db: DbSession):
     """
     return get_items(db)
 
+
 @router.post("", response_model=Item)
 def add_item(item: ItemCreate, db: DbSession):
     """
     Create a new clothing item.
     """
     return create_item(db, item)
+
 
 @router.get("/{item_id}", response_model=Item)
 def get_item(item_id: int, db: DbSession):
@@ -47,6 +49,7 @@ def get_item(item_id: int, db: DbSession):
         raise HTTPException(status_code=404, detail="Item not found")
 
     return item
+
 
 @router.put("/{item_id}", response_model=Item)
 def update_existing_item(
@@ -63,6 +66,7 @@ def update_existing_item(
         raise HTTPException(status_code=404, detail="Item not found")
 
     return updated_item
+
 
 @router.delete("/{item_id}", response_model=bool)
 def remove_item(item_id: int, db: DbSession):

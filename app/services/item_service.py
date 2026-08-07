@@ -26,9 +26,9 @@ def create_item(db: Session, item_data: ItemCreate) -> ItemModel:
         size=item_data.size,
     )
 
-    db.add(item) # stage object for insert
-    db.commit() # save transaction
-    db.refresh(item) # reload generated database values, like id
+    db.add(item)  # stage object for insert
+    db.commit()  # save transaction
+    db.refresh(item)  # reload generated database values, like id
 
     return item
 
