@@ -21,6 +21,8 @@ The goal of this project is to deeply understand backend API development, includ
 - ruff
 - Git
 - email-validator
+- python-multipart
+- PyJWT
 - pwdlib / Argon2 password hashing
 
 ## Current Features
@@ -34,6 +36,12 @@ The goal of this project is to deeply understand backend API development, includ
 - Password hashing for registered users
 - Duplicate email validation
 - Duplicate username validation
+- User login endpoint
+- OAuth2 password form login support
+- JWT access token creation
+- JWT access token decoding and validation
+- Protected current-user endpoint with `GET /auth/me`
+- Bearer token authentication through the `Authorization` header
 - Safe user responses that do not expose passwords or password hashes
 - SQLite persistence with SQLAlchemy
 - PostgreSQL support
@@ -65,7 +73,11 @@ GET /health
 
 ```http
 POST /auth/register
+POST /auth/login
+GET /auth/me
 ```
+
+#### Register
 
 Current registration request body:
 
@@ -97,6 +109,58 @@ password
 hashed_password
 ```
 
+#### Login
+
+`POST /auth/login` uses OAuth2 password form data.
+
+In Swagger, the login form uses:
+
+```txt
+username
+password
+```
+
+For Suot, the `username` field is treated as the user's email address.
+
+Example:
+
+```txt
+username: jim@example.com
+password: password123
+```
+
+Current login response body:
+
+```json
+{
+  "access_token": "eyJ...",
+  "token_type": "bearer"
+}
+```
+
+#### Current User
+
+`GET /auth/me` is a protected route.
+
+The client must send the JWT access token through the authorization header:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+Current `/auth/me` response body:
+
+```json
+{
+  "id": 1,
+  "email": "jim@example.com",
+  "username": "jim",
+  "is_active": true,
+  "created_at": "2026-08-01T05:12:13.071212Z",
+  "updated_at": "2026-08-01T05:12:13.071222Z"
+}
+```
+
 ### Items
 
 ```http
@@ -125,7 +189,9 @@ SQLAlchemy Session
 PostgreSQL database
 ```
 
-## Current Auth Registration Flow
+## Current Auth Flow
+
+### Registration Flow
 
 ```txt
 POST /auth/register
@@ -156,6 +222,56 @@ The client sends a raw password during registration.
 The backend never stores the raw password.
 The backend stores only hashed_password.
 The API never returns password or hashed_password.
+```
+
+### Login Flow
+
+```txt
+POST /auth/login
+  ↓
+Client sends email and password as OAuth2 form data
+  ↓
+Backend finds user by email
+  ↓
+Backend verifies the raw password against hashed_password
+  ↓
+If valid, backend creates a JWT access token
+  ↓
+API returns access_token and token_type
+```
+
+Important rule:
+
+```txt
+The password proves identity during login.
+The JWT proves identity on future requests.
+```
+
+### Current User Flow
+
+```txt
+GET /auth/me
+  ↓
+Client sends Authorization: Bearer <access_token>
+  ↓
+OAuth2PasswordBearer extracts the token
+  ↓
+Backend decodes and verifies the JWT
+  ↓
+Backend reads sub from the token payload
+  ↓
+sub is treated as the user id
+  ↓
+Backend finds the user in PostgreSQL
+  ↓
+API returns the current user
+```
+
+Important rule:
+
+```txt
+Login creates the token.
+/auth/me consumes the token.
 ```
 
 ## Database Design
@@ -196,6 +312,157 @@ username
 
 hashed_password
   → stored password hash, never plaintext password
+```
+
+## Auth Design
+
+Current authentication design:
+
+```txt
+Authentication
+  → Who are you?
+
+Authorization
+  → What data are you allowed to access?
+```
+
+Current implementation:
+
+```txt
+/register
+  → creates identity
+
+/login
+  → proves identity and returns JWT
+
+/auth/me
+  → uses JWT to identify current user
+```
+
+JWT payload currently includes:
+
+```txt
+sub
+  → subject
+  → user id
+
+exp
+  → expiration time
+  → token stops being valid after this time
+```
+
+The token is signed with the app secret key.
+
+```txt
+JWT is encoded and signed, not encrypted.
+The backend can verify whether the token was created by Suot and whether it has expired.
+```
+
+## Layer Responsibilities
+
+### Models
+
+Models define how data is stored in the database.
+
+```txt
+app/models/
+├── item.py
+└── user.py
+```
+
+Example:
+
+```txt
+UserModel
+  → users table
+
+ItemModel
+  → items table
+```
+
+### Schemas
+
+Schemas define how data enters and leaves the API.
+
+```txt
+app/schemas/
+├── item.py
+└── user.py
+```
+
+Examples:
+
+```txt
+UserCreate
+  → registration request body
+
+User
+  → safe user response body
+
+Token
+  → login response body
+```
+
+Important rule:
+
+```txt
+Request schemas can contain secrets when needed.
+Response schemas should not contain secrets.
+```
+
+### Services
+
+Services contain business and database logic.
+
+```txt
+app/services/
+├── item_service.py
+└── user_service.py
+```
+
+Examples:
+
+```txt
+create_user()
+authenticate_user()
+get_user_by_email()
+get_user_by_id()
+create_item()
+get_items()
+```
+
+### Routers
+
+Routers define HTTP endpoints and HTTP behavior.
+
+```txt
+app/routers/
+├── auth.py
+├── health.py
+└── items.py
+```
+
+Examples:
+
+```txt
+POST /auth/register
+POST /auth/login
+GET /auth/me
+GET /items
+POST /items
+```
+
+### Security
+
+`app/security.py` contains low-level security helpers.
+
+Current responsibilities:
+
+```txt
+hash_password()
+verify_password()
+create_access_token()
+decode_access_token()
 ```
 
 ## Docker Architecture
@@ -256,6 +523,38 @@ Important distinction:
 ```txt
 localhost → used when the API or Alembic runs from the laptop
 db        → used when the API runs inside Docker Compose
+```
+
+## Auth Configuration
+
+Authentication settings are controlled through environment variables.
+
+Example:
+
+```env
+SECRET_KEY=change-me
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+```
+
+Current meaning:
+
+```txt
+SECRET_KEY
+  → used to sign and verify JWT access tokens
+
+ALGORITHM
+  → JWT signing algorithm
+
+ACCESS_TOKEN_EXPIRE_MINUTES
+  → how long an access token remains valid
+```
+
+Production warning:
+
+```txt
+The development secret key should not be used in production.
+Production secrets should come from secure environment variables or a secret manager.
 ```
 
 ## Database Migrations
@@ -363,6 +662,9 @@ Create a local `.env` file:
 
 ```env
 DATABASE_URL=sqlite:///./suot.db
+SECRET_KEY=change-me
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
 Run the development server:
@@ -437,7 +739,48 @@ docker compose down -v
   → stops containers and deletes the database volume
 ```
 
-## Testing
+## Testing with Swagger
+
+Open:
+
+```txt
+http://localhost:8000/docs
+```
+
+Current manual auth flow:
+
+```txt
+1. POST /auth/register
+2. POST /auth/login
+3. Copy access_token
+4. Click Authorize
+5. Paste the token
+6. Run GET /auth/me
+```
+
+In Swagger's OAuth2 authorize popup:
+
+```txt
+username
+  → enter the user's email address
+
+password
+  → enter the user's password
+
+client_id
+  → leave blank
+
+client_secret
+  → leave blank
+```
+
+After authorization, Swagger sends:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+## Automated Testing
 
 Local automated tests are run with:
 
@@ -470,6 +813,15 @@ DELETE /items/999
 POST   /auth/register
 POST   /auth/register duplicate email
 POST   /auth/register duplicate username
+```
+
+Planned auth tests:
+
+```txt
+POST   /auth/login with valid credentials
+POST   /auth/login with invalid password
+GET    /auth/me with valid token
+GET    /auth/me without token
 ```
 
 ## Git Workflow
@@ -541,12 +893,13 @@ feature/add-item-brand
 feature/user-model
 feature/user-registration
 feature/user-login
-feature/auth
+feature/auth-me
 feature/user-inventory
 feature/recommendations
 fix/item-not-found
 docs/update-devlog
 test/item-service-tests
+test/auth-tests
 ```
 
 ### Git Rules
@@ -574,11 +927,12 @@ Merge only after the feature works.
 - Phase 6B: Schema evolution with `brand` field — DONE
 - Phase 7A: User model and users table migration — DONE
 - Phase 7B: User registration — DONE
-- Phase 7C: Login and JWT access tokens
-- Phase 7D: Protected auth route with `/auth/me`
-- Phase 7E: User-owned item inventory
-- Phase 8: Recommendation logic
-- Phase 9: Deployment
+- Phase 7C: Login and JWT access tokens — DONE
+- Phase 7D: Protected auth route with `/auth/me` — DONE
+- Phase 7E: Auth tests for login and `/auth/me`
+- Phase 8: User-owned item inventory
+- Phase 9: Recommendation logic
+- Phase 10: Deployment
 
 ## Learning Goals
 
@@ -611,12 +965,18 @@ local infrastructure with Docker
 password hashing
 safe response schemas
 duplicate account validation
+OAuth2 password flow
+Bearer token authentication
+JWT access tokens
+JWT token creation
+JWT token decoding
+current-user dependencies
 authentication design
 ```
 
-## Current Auth Roadmap
+## Current Auth Status
 
-Current completed auth foundation:
+Completed auth foundation:
 
 ```txt
 UserModel
@@ -624,22 +984,26 @@ User schemas
 users table migration
 password hashing helper
 POST /auth/register
+POST /auth/login
+JWT access token creation
+JWT access token decoding
+GET /auth/me
 registration tests
 ```
 
-Next planned auth features:
+Next planned auth work:
 
 ```txt
-POST /auth/login
-  → verify email and password
-  → return JWT access token
+POST /auth/login tests
+GET /auth/me tests
+```
 
-GET /auth/me
-  → verify JWT
-  → return current authenticated user
+Next planned backend feature:
 
-Protected item routes
-  → require valid JWT
+```txt
+User-owned inventory
+  → add user_id to items
+  → protect item routes
   → only return items owned by current_user.id
 ```
 

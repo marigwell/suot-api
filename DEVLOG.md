@@ -1109,7 +1109,7 @@ UserCreate
   → email, username, password
 
 UserLogin
-  → future login request
+  → login request schema used before switching to OAuth2 form login
   → email, password
 
 User
@@ -1119,6 +1119,10 @@ User
 UserPublic
   → future public profile response
   → id, username
+
+Token
+  → login response
+  → access_token, token_type
 ```
 
 ### Request Schema vs Response Schema Lesson
@@ -1204,23 +1208,20 @@ The project currently uses `pwdlib[argon2]` for password hashing.
 Current functions:
 
 ```txt
-hash_password(password)
-verify_password(plain_password, hashed_password)
+hash_password()
+verify_password()
+create_access_token()
+decode_access_token()
 ```
 
-Responsibilities:
+It handles:
 
 ```txt
-hash_password()
-  → convert raw password into password hash
-
-verify_password()
-  → compare login password against stored password hash
+password hashing
+password verification
+JWT access token creation
+JWT access token decoding
 ```
-
-Registration currently uses `hash_password()`.
-
-Login later will use `verify_password()`.
 
 ### User Service Layer
 
@@ -1233,10 +1234,12 @@ normalize_email()
 normalize_username()
 get_user_by_email()
 get_user_by_username()
+get_user_by_id()
 create_user()
+authenticate_user()
 ```
 
-This keeps database and business logic out of the router.
+It checks existing users, normalizes inputs, hashes passwords through `security.py`, creates user rows, and verifies login credentials.
 
 Clean separation:
 
@@ -1248,7 +1251,7 @@ user_service.py
   → user database/business logic
 
 security.py
-  → password hashing and verification
+  → password hashing, password verification, and JWT helpers
 ```
 
 ### Registration Flow
@@ -1391,38 +1394,430 @@ Phase 7A complete: the user model, user schemas, and users table migration are c
 
 Phase 7B complete: user registration works with password hashing, duplicate email validation, duplicate username validation, and safe response schemas.
 
+---
+
+## Day 9 — Login, JWT Access Tokens, and `/auth/me`
+
+### Goal
+
+Complete the next part of authentication by adding login, creating JWT access tokens, and building a protected route that can identify the current user from a token.
+
+Before this phase, Suot could create user accounts.
+
+After this phase, Suot can:
+
+```txt
+Register a user.
+Log in with valid credentials.
+Create a JWT access token.
+Receive that token on a protected route.
+Decode the token.
+Find the current user.
+Return the current authenticated user.
+```
+
+### Work Completed
+
+- Installed PyJWT for JWT access token creation and decoding.
+- Added authentication settings to the app configuration.
+- Added `SECRET_KEY`, `ALGORITHM`, and `ACCESS_TOKEN_EXPIRE_MINUTES`.
+- Added a `Token` response schema.
+- Added `create_access_token()` to `security.py`.
+- Added `decode_access_token()` to `security.py`.
+- Added `authenticate_user()` to `user_service.py`.
+- Added `get_user_by_id()` to `user_service.py`.
+- Added `POST /auth/login`.
+- Updated `/auth/login` to use OAuth2 password form data.
+- Installed `python-multipart` for form-data parsing.
+- Added `OAuth2PasswordBearer` for Bearer token authentication.
+- Added `get_current_user()` as a reusable authentication dependency.
+- Added `GET /auth/me`.
+- Tested login through Swagger.
+- Tested Swagger authorization with a Bearer token.
+- Confirmed `/auth/me` returns the current authenticated user.
+- Fixed import sorting and formatting issues with Ruff.
+- Handled Docker/Swagger refresh issues while testing the new auth flow.
+
+### Login Flow
+
+Current endpoint:
+
+```http
+POST /auth/login
+```
+
+The login endpoint uses OAuth2 password form data.
+
+In Swagger, the login form shows:
+
+```txt
+username
+password
+```
+
+For Suot, the `username` field is treated as the user’s email address.
+
+Example:
+
+```txt
+username: jim@example.com
+password: password123
+```
+
+Login flow:
+
+```txt
+POST /auth/login
+  ↓
+Client sends email and password as form data
+  ↓
+Backend finds user by email
+  ↓
+Backend verifies the raw password against hashed_password
+  ↓
+If credentials are invalid, return 401 Unauthorized
+  ↓
+If credentials are valid, create JWT access token
+  ↓
+Return access_token and token_type
+```
+
+Successful response:
+
+```json
+{
+  "access_token": "eyJ...",
+  "token_type": "bearer"
+}
+```
+
+### Why Login Uses `401 Unauthorized`
+
+If the email does not exist or the password is wrong, the API returns:
+
+```http
+401 Unauthorized
+```
+
+Response:
+
+```json
+{
+  "detail": "Invalid email or password"
+}
+```
+
+The response intentionally does not reveal whether the email exists.
+
+Reason:
+
+```txt
+Do not help attackers discover registered emails.
+```
+
+### JWT Access Token Creation
+
+After successful login, the backend creates a JWT access token.
+
+The token currently contains:
+
+```txt
+sub
+  → subject
+  → user id
+
+exp
+  → expiration time
+  → when the token stops being valid
+```
+
+For Suot:
+
+```txt
+sub = user.id
+```
+
+Example:
+
+```txt
+sub = "4"
+```
+
+This means:
+
+```txt
+This token represents user with id 4.
+```
+
+### Token Creation vs Token Consumption
+
+This was the main concept of this phase.
+
+Token creation:
+
+```txt
+POST /auth/login
+  ↓
+credentials are valid
+  ↓
+backend creates JWT
+  ↓
+client receives token
+```
+
+Token consumption:
+
+```txt
+GET /auth/me
+  ↓
+client sends token
+  ↓
+backend verifies token
+  ↓
+backend identifies current user
+```
+
+Important distinction:
+
+```txt
+/login creates the token.
+/auth/me consumes the token.
+```
+
+### Bearer Token Authentication
+
+Protected routes expect the client to send the token through the `Authorization` header.
+
+```http
+Authorization: Bearer <access_token>
+```
+
+The word `Bearer` means:
+
+```txt
+Whoever bears this token is treated as authenticated,
+as long as the token is valid.
+```
+
+This is why access tokens should be protected.
+
+### `OAuth2PasswordRequestForm` vs `OAuth2PasswordBearer`
+
+Two similar names were used, but they do different jobs.
+
+```txt
+OAuth2PasswordRequestForm
+  → used by /auth/login
+  → receives username and password form data
+
+OAuth2PasswordBearer
+  → used by protected routes
+  → reads Authorization: Bearer <token>
+```
+
+Important distinction:
+
+```txt
+OAuth2PasswordRequestForm handles login input.
+OAuth2PasswordBearer handles token input.
+```
+
+### `get_current_user()`
+
+`get_current_user()` is the reusable authentication dependency.
+
+It does this:
+
+```txt
+Authorization: Bearer <token>
+  ↓
+OAuth2PasswordBearer extracts the token
+  ↓
+decode_access_token() verifies the token
+  ↓
+payload["sub"] gives the user id
+  ↓
+get_user_by_id() finds the user in the database
+  ↓
+return current user
+```
+
+Simple definition:
+
+```txt
+get_current_user() = convert a valid token into the current UserModel
+```
+
+This matters because future protected routes can reuse it.
+
+Example future pattern:
+
+```python
+current_user: Annotated[UserModel, Depends(get_current_user)]
+```
+
+That will let item routes know which user is making the request.
+
+### `/auth/me`
+
+Current endpoint:
+
+```http
+GET /auth/me
+```
+
+This route answers:
+
+```txt
+Given this token, who am I?
+```
+
+Flow:
+
+```txt
+GET /auth/me
+  ↓
+Client sends Authorization: Bearer <access_token>
+  ↓
+Backend verifies and decodes JWT
+  ↓
+Backend reads sub as user id
+  ↓
+Backend finds user in PostgreSQL
+  ↓
+API returns current user
+```
+
+Successful response:
+
+```json
+{
+  "id": 4,
+  "email": "jiana@example.com",
+  "username": "weller",
+  "is_active": true,
+  "created_at": "2026-08-07T00:13:23.701647Z",
+  "updated_at": "2026-08-07T00:13:23.701650Z"
+}
+```
+
+This confirmed:
+
+```txt
+Login created the token.
+Swagger sent the token as a Bearer token.
+The backend decoded the token.
+The backend read the user id from sub.
+The backend found the user.
+The backend returned the current authenticated user.
+```
+
+### Swagger Auth Flow
+
+Manual Swagger testing flow:
+
+```txt
+1. POST /auth/register
+2. POST /auth/login
+3. Copy access_token
+4. Click Authorize
+5. Paste the token
+6. Run GET /auth/me
+```
+
+In Swagger’s OAuth2 authorize popup:
+
+```txt
+username
+  → enter the user's email address
+
+password
+  → enter the user's password
+
+client_id
+  → leave blank
+
+client_secret
+  → leave blank
+```
+
+After authorization, Swagger sends:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+### Bugs and Tooling Issues
+
+Several non-code-concept issues came up during this phase.
+
+```txt
+Swagger did not show /auth/me at first
+  → files had not actually saved in VS Code
+
+VS Code showed newer-file save conflicts
+  → used overwrite to save current edits
+
+Docker BuildKit hung while pulling an image
+  → Docker Desktop had an update failure
+
+Swagger authorization returned 422
+  → login endpoint expected JSON while Swagger OAuth2 expected form data
+
+Ruff warnings appeared
+  → imports were unsorted or formatting changed
+```
+
+These issues were mostly tooling and integration problems, not backend design problems.
+
+### Phase 7C Status
+
+Phase 7C complete: login works and returns JWT access tokens.
+
+### Phase 7D Status
+
+Phase 7D complete: `/auth/me` works and can identify the current user from a Bearer token.
+
 ### Next Planned Phase
 
 Next phase:
 
 ```txt
-Phase 7C — Login and JWT access tokens
+Phase 7E — Auth tests for login and /auth/me
 ```
 
-Planned flow:
+Planned test coverage:
 
 ```txt
-POST /auth/login
-  ↓
-Client sends email and password
-  ↓
-Backend finds user by email
-  ↓
-Backend verifies password against hashed_password
-  ↓
-Backend creates JWT access token
-  ↓
-API returns token
+POST /auth/login with valid credentials
+  → returns access_token
+
+POST /auth/login with wrong password
+  → returns 401 Unauthorized
+
+GET /auth/me with valid token
+  → returns current user
+
+GET /auth/me without token
+  → returns 401 Unauthorized
 ```
 
 After that:
 
 ```txt
-GET /auth/me
-  → return current authenticated user
+Phase 8 — User-owned inventory
+```
 
-Protected item routes
-  → only allow users to access their own items
+Planned flow:
+
+```txt
+Add user_id to items
+  ↓
+Protect item routes
+  ↓
+Use current_user.id
+  ↓
+Only return items owned by the current user
 ```
 
 ---
@@ -1563,6 +1958,14 @@ Example:
 ```txt
 Find the item where id == item_id
 ```
+
+Current user-related use:
+
+```python
+db.get(UserModel, user_id)
+```
+
+This finds one user by primary key.
 
 ### `select()`
 
@@ -1806,6 +2209,10 @@ UserCreate
 User
   → response schema
   → contains id, email, username, is_active, created_at, updated_at
+
+Token
+  → response schema
+  → contains access_token and token_type
 ```
 
 Important rule:
@@ -1833,7 +2240,7 @@ hashed_password stored in database
 
 The backend should never store raw passwords.
 
-Later, login will use:
+Login uses:
 
 ```txt
 Raw login password
@@ -1852,11 +2259,20 @@ Current functions:
 ```txt
 hash_password()
 verify_password()
+create_access_token()
+decode_access_token()
 ```
 
 It does not decide whether a user should be created.
 
-It only handles password hashing and password verification.
+It handles:
+
+```txt
+password hashing
+password verification
+JWT access token creation
+JWT access token decoding
+```
 
 ### `user_service.py`
 
@@ -1869,26 +2285,32 @@ normalize_email()
 normalize_username()
 get_user_by_email()
 get_user_by_username()
+get_user_by_id()
 create_user()
+authenticate_user()
 ```
 
-It checks existing users, normalizes inputs, hashes the password through `security.py`, and creates the user row.
+It checks existing users, normalizes inputs, hashes passwords through `security.py`, creates user rows, and verifies login credentials.
 
 ### `auth.py`
 
 `auth.py` is the router for authentication-related HTTP endpoints.
 
-Current endpoint:
+Current endpoints:
 
 ```http
 POST /auth/register
-```
-
-Future endpoints:
-
-```http
 POST /auth/login
 GET /auth/me
+```
+
+It handles:
+
+```txt
+registration HTTP flow
+login HTTP flow
+Bearer token authentication
+current-user route protection
 ```
 
 ### `409 Conflict`
@@ -1901,6 +2323,89 @@ Current uses:
 Email already registered
 Username already taken
 ```
+
+### `401 Unauthorized`
+
+`401 Unauthorized` means the user failed authentication or did not provide valid authentication credentials.
+
+Current uses:
+
+```txt
+Invalid email or password
+Could not validate credentials
+Missing Bearer token
+Expired or invalid token
+```
+
+### JWT
+
+JWT means JSON Web Token.
+
+In this project, JWTs are used as access tokens.
+
+Current token payload includes:
+
+```txt
+sub
+  → subject
+  → user id
+
+exp
+  → expiration time
+```
+
+Simple definition:
+
+```txt
+JWT = signed proof that a user recently logged in
+```
+
+Important distinction:
+
+```txt
+JWT is encoded and signed.
+JWT is not encrypted.
+```
+
+The backend can verify whether a token was created by Suot and whether it has been modified.
+
+### Bearer Token
+
+A Bearer token is sent in the HTTP `Authorization` header.
+
+```http
+Authorization: Bearer <access_token>
+```
+
+Simple definition:
+
+```txt
+Bearer token = whoever carries this valid token is treated as authenticated
+```
+
+### `get_current_user()`
+
+`get_current_user()` is the reusable authentication dependency.
+
+It converts a valid Bearer token into the current user.
+
+Flow:
+
+```txt
+Authorization header
+  ↓
+OAuth2PasswordBearer extracts token
+  ↓
+decode_access_token() validates JWT
+  ↓
+read sub as user id
+  ↓
+get_user_by_id()
+  ↓
+return UserModel
+```
+
+This is the foundation for protected routes.
 
 ### `TestClient`
 
@@ -1917,7 +2422,8 @@ This lets tests make requests like:
 ```python
 client.post("/items", json={...})
 client.post("/auth/register", json={...})
-client.get("/items")
+client.post("/auth/login", data={...})
+client.get("/auth/me", headers={...})
 client.put("/items/1", json={...})
 client.delete("/items/1")
 ```
@@ -2146,11 +2652,11 @@ The router handles HTTP concerns.
 
 The service handles item logic.
 
-The auth router handles registration and future login/auth endpoints.
+The auth router handles registration, login, and current-user endpoints.
 
 The item service handles item CRUD logic.
 
-The user service handles user lookup, duplicate account checks, password hashing, and user creation.
+The user service handles user lookup, duplicate account checks, password hashing, user creation, and login credential verification.
 
 The SQLAlchemy models define database tables.
 
@@ -2173,6 +2679,23 @@ The project uses Alembic for database migrations, which means schema changes are
 The project successfully proved schema evolution by adding an optional `brand` column to the existing `items` table.
 
 The project now has a `users` table and can register users safely by hashing passwords and returning safe user responses.
+
+The project now supports registration, login, JWT access token creation, JWT access token decoding, and `/auth/me`.
+
+The current authentication flow is:
+
+```txt
+/register
+  → create account
+
+/login
+  → verify credentials
+  → create JWT access token
+
+/auth/me
+  → consume JWT access token
+  → identify current user
+```
 
 Current Docker architecture:
 
@@ -2209,19 +2732,7 @@ Docker Compose runs the services together in a reproducible local environment.
 
 Git branches keep major changes isolated until they are tested and ready to merge.
 
-The next major backend concept is login and token-based authentication:
-
-```txt
-POST /auth/login
-  ↓
-verify email and password
-  ↓
-create JWT access token
-  ↓
-client sends token on protected requests
-```
-
-After login works, the next major authorization step is user-owned inventory:
+The next major backend concept is user-owned inventory:
 
 ```txt
 items.user_id
@@ -2230,3 +2741,5 @@ current_user.id
   ↓
 users can only access their own items
 ```
+
+This is where authentication starts supporting authorization.
