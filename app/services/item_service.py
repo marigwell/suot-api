@@ -8,17 +8,30 @@ from app.models.item import ItemModel
 from app.schemas.item import ItemCreate
 
 
-def get_items(db: Session) -> list[ItemModel]:
-    statement = select(ItemModel)
-    return list(db.scalars(statement).all())
+def get_items(db: Session, user_id: int) -> list[ItemModel]:
+    statement = select(ItemModel).where(ItemModel.user_id == user_id)
+    return list(db.scalars(statement))
 
 
-def get_item_by_id(db: Session, item_id: int) -> ItemModel | None:
-    return db.get(ItemModel, item_id)
+def get_item_by_id(
+    db: Session,
+    item_id: int,
+    user_id: int,
+) -> ItemModel | None:
+    statement = select(ItemModel).where(
+        ItemModel.id == item_id,
+        ItemModel.user_id == user_id,
+    )
+    return db.scalar(statement)
 
 
-def create_item(db: Session, item_data: ItemCreate) -> ItemModel:
+def create_item(
+    db: Session,
+    item_data: ItemCreate,
+    user_id: int,
+) -> ItemModel:
     item = ItemModel(
+        user_id=user_id,
         name=item_data.name,
         brand=item_data.brand,
         category=item_data.category,
@@ -26,9 +39,9 @@ def create_item(db: Session, item_data: ItemCreate) -> ItemModel:
         size=item_data.size,
     )
 
-    db.add(item)  # stage object for insert
-    db.commit()  # save transaction
-    db.refresh(item)  # reload generated database values, like id
+    db.add(item)
+    db.commit()
+    db.refresh(item)
 
     return item
 
@@ -37,8 +50,9 @@ def update_item(
     db: Session,
     item_id: int,
     item_data: ItemCreate,
+    user_id: int,
 ) -> ItemModel | None:
-    item = db.get(ItemModel, item_id)
+    item = get_item_by_id(db, item_id, user_id)
 
     if item is None:
         return None
@@ -55,8 +69,8 @@ def update_item(
     return item
 
 
-def delete_item(db: Session, item_id: int) -> bool:
-    item = db.get(ItemModel, item_id)
+def delete_item(db: Session, item_id: int, user_id: int) -> bool:
+    item = get_item_by_id(db, item_id, user_id)
 
     if item is None:
         return False

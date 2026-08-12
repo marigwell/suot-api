@@ -15,9 +15,7 @@ def normalize_username(username: str) -> str:
 
 
 def get_user_by_email(db: Session, email: str) -> UserModel | None:
-    statement = select(UserModel).where(
-        UserModel.email == normalize_email(email)
-    )
+    statement = select(UserModel).where(UserModel.email == normalize_email(email))
     return db.scalar(statement)
 
 

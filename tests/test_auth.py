@@ -146,7 +146,7 @@ def test_login_user_returns_token():
     assert login_response.status_code == 200
 
     data = login_response.json()
-    
+
     assert "access_token" in data
     assert data["token_type"] == "bearer"
     assert data["access_token"]
@@ -199,7 +199,7 @@ def test_read_current_user_with_valid_token():
         },
     )
 
-    #verify user registration
+    # verify user registration
     assert register_response.status_code == 201
 
     # log in to receive an access token
