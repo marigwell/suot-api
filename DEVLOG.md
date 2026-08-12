@@ -2,7 +2,13 @@
 
 This file tracks the learning process, design decisions, and backend concepts explored while building Suot API.
 
+---
+
 ## Day 1 — FastAPI Foundation
+
+### Goal
+
+Start the Suot API project and understand the basic structure of a FastAPI backend.
 
 ### Work Completed
 
@@ -23,9 +29,17 @@ This file tracks the learning process, design decisions, and backend concepts ex
 GET /health
 ```
 
+### Phase Status
+
+Phase 1 started: FastAPI foundation created.
+
 ---
 
 ## Day 2 — In-Memory CRUD
+
+### Goal
+
+Build the first version of item CRUD using temporary in-memory storage.
 
 ### Work Completed
 
@@ -74,54 +88,6 @@ If an item does not exist, the API returns:
 
 This prevents the server from crashing with a `500 Internal Server Error`.
 
-### PUT Algorithm
-
-```txt
-Receive item_id and updated item data
-
-Loop through every item in inventory
-
-If current item ID matches item_id:
-    Replace the old item with updated data
-    Return the updated item
-
-If no item is found:
-    Return None
-```
-
-### Why `enumerate()` Was Used
-
-`enumerate()` gives access to both:
-
-```txt
-index
-item
-```
-
-This matters because updating an item in a list requires knowing where the item is located.
-
-Example:
-
-```python
-for index, item in enumerate(items):
-    ...
-```
-
-### DELETE Algorithm
-
-```txt
-Receive item_id
-
-Loop through every item in inventory
-
-If current item ID matches item_id:
-    Remove the item from the list using its index
-    Return success
-
-If no item is found:
-    Return failure
-```
-
 ### ID Design Decision
 
 IDs should not be reused after deletion.
@@ -133,9 +99,9 @@ IDs represent stable record identity.
 If an old ID is reused, historical references such as orders, favorites, logs, or audit records could accidentally point to the wrong item.
 ```
 
-### Phase 1 Status
+### Phase Status
 
-Phase 1 complete: In-memory item CRUD finished.
+Phase 1 complete: in-memory item CRUD finished.
 
 ---
 
@@ -187,9 +153,13 @@ Permanently saves pending database changes in the current transaction.
 Important distinction:
 
 ```txt
-db.add()    → prepare the change
-db.commit() → save the change
+db.add()     → prepare the change
+db.commit()  → save the change
 ```
+
+### Phase Status
+
+Database and ORM concepts introduced.
 
 ---
 
@@ -213,8 +183,6 @@ Replace temporary in-memory storage with persistent storage so data survives aft
 ```python
 items = []
 ```
-
-This stored data only in memory.
 
 Problem:
 
@@ -270,7 +238,7 @@ SQLAlchemy Session
 SQLite database
 ```
 
-### Phase 2 Status
+### Phase Status
 
 Phase 2 complete: SQLite persistence with SQLAlchemy finished.
 
@@ -299,44 +267,6 @@ Before testing, I had to manually check endpoints through Swagger UI.
 Now, pytest can automatically verify that the API still works.
 
 This matters because as the project grows, tests help catch broken behavior early.
-
-### Test Folder Structure
-
-```txt
-suot-api/
-├── app/
-├── tests/
-│   └── test_items.py
-├── pyproject.toml
-└── README.md
-```
-
-The `app/` folder contains the actual application.
-
-The `tests/` folder contains code that checks whether the application works correctly.
-
-### pytest Configuration
-
-Added this to `pyproject.toml`:
-
-```toml
-[tool.pytest.ini_options]
-pythonpath = ["."]
-testpaths = ["tests"]
-```
-
-This tells pytest:
-
-```txt
-Use the project root as an import path.
-Look for tests inside the tests folder.
-```
-
-This fixed the issue where pytest could not import:
-
-```python
-from app.main import app
-```
 
 ### Test Database Isolation
 
@@ -404,15 +334,9 @@ DELETE /items/{id}      → delete item
 DELETE /items/999       → return 404 for missing item
 ```
 
-### Test Result
+### Phase Status
 
-```txt
-8 passed
-```
-
-### Phase 3B Status
-
-Phase 3B complete: item CRUD API is now covered by automated tests.
+Phase 3 complete: item CRUD API is now covered by automated tests.
 
 ---
 
@@ -430,26 +354,21 @@ Move Suot closer to a real backend system by separating configuration from appli
 - Added `.env.example` as a safe configuration template.
 - Kept the real `.env` file ignored by Git.
 - Installed Docker Desktop.
-- Verified that the Docker CLI works.
 - Created `docker-compose.yml`.
 - Ran PostgreSQL inside Docker.
 - Connected the local FastAPI app to the PostgreSQL container.
 - Verified PostgreSQL data directly with `psql`.
-- Created a feature branch for PostgreSQL setup.
-- Created a feature branch for Dockerizing the API.
+- Created feature branches for infrastructure work.
 - Created a `Dockerfile` for the FastAPI API.
 - Created a `.dockerignore` file.
 - Updated Docker Compose to run both the API and database.
 - Built and ran the API container.
-- Confirmed `docker compose ps` shows both `suot-api` and `suot-postgres` running.
 - Confirmed Swagger works through `http://localhost:8000/docs`.
 - Confirmed item CRUD works through the Dockerized API.
 
 ### Why Configuration Matters
 
 Before this step, the database URL was hardcoded in `database.py`.
-
-That meant the app was directly tied to one database setup.
 
 A better design is:
 
@@ -498,33 +417,13 @@ This is closer to real backend architecture because the API and database are sep
 
 ### Local API vs Dockerized API
 
-At first, only PostgreSQL was running in Docker.
-
-```txt
-Laptop
-├── FastAPI app running locally with uvicorn
-└── Docker
-    └── PostgreSQL container
-```
-
-In that setup, the API connected to PostgreSQL with:
+When the API runs locally on the laptop, it connects to PostgreSQL with:
 
 ```env
 DATABASE_URL=postgresql+psycopg://suot:suot@localhost:5432/suot
 ```
 
-Then the API was containerized too.
-
-```txt
-Docker Compose
-├── api container
-│   └── FastAPI app
-│
-└── db container
-    └── PostgreSQL database
-```
-
-In this setup, the API connects to PostgreSQL with:
+When the API runs inside Docker Compose, it connects to PostgreSQL with:
 
 ```env
 DATABASE_URL=postgresql+psycopg://suot:suot@db:5432/suot
@@ -560,26 +459,6 @@ db service          → PostgreSQL database
 postgres_data       → persistent PostgreSQL storage
 ```
 
-### Amazon Warehouse Analogy
-
-The PostgreSQL database is like a warehouse.
-
-The item rows are like packages.
-
-The database tables are like shelves.
-
-The FastAPI API is like the delivery system that decides how packages are created, read, updated, and deleted.
-
-When only PostgreSQL was in Docker, the warehouse was containerized but the delivery system was still running locally.
-
-After Dockerizing the API, both the delivery system and warehouse run inside Docker Compose.
-
-```txt
-Docker Compose
-├── delivery system → FastAPI API container
-└── warehouse       → PostgreSQL database container
-```
-
 ### Testing Clarification
 
 `uv run pytest` still runs tests locally.
@@ -599,61 +478,16 @@ psql inside suot-postgres
   → direct verification of database rows
 ```
 
-The current tests are still useful because they protect CRUD behavior.
-
-However, they are not Docker integration tests yet.
-
 ### Git Branching Lesson
 
 `main` should represent the stable version of the project.
 
 Feature branches should be used for meaningful work that could break the app.
 
-Examples:
-
-```txt
-feature/postgres-setup
-feature/dockerize-api
-feature/auth
-feature/user-inventory
-```
-
 The basic sequence is:
 
 ```txt
 branch → build → test → commit → merge → push
-```
-
-For PostgreSQL setup:
-
-```txt
-feature/postgres-setup
-  ↓
-Run PostgreSQL in Docker
-  ↓
-Connect local FastAPI app to PostgreSQL
-  ↓
-Test with Swagger and psql
-  ↓
-Commit and merge into main
-```
-
-For Dockerizing the API:
-
-```txt
-feature/dockerize-api
-  ↓
-Create Dockerfile
-  ↓
-Create .dockerignore
-  ↓
-Add api service to docker-compose.yml
-  ↓
-Run docker compose up --build
-  ↓
-Test localhost:8000/docs
-  ↓
-Commit and merge into main
 ```
 
 Important Git rules:
@@ -667,31 +501,9 @@ Confirm Docker containers run before merging Docker changes.
 Keep commit messages clear and human-readable.
 ```
 
-### Final Checkpoint
+### Phase Status
 
-By the end of this phase, Suot could run as a local containerized backend system.
-
-Confirmed working:
-
-```txt
-docker compose ps shows:
-- suot-api running
-- suot-postgres running
-```
-
-http://localhost:8000/docs opens Swagger UI.
-
-POST /items works through the Dockerized API.
-
-GET /items returns data from PostgreSQL.
-
-PostgreSQL stores the item rows inside the Dockerized database service.
-
-### Phase 4B Status
-
-Phase 4B complete: PostgreSQL now runs locally through Docker.
-
-### Phase 5 Status
+Phase 4 complete: PostgreSQL now runs locally through Docker.
 
 Phase 5 complete: the FastAPI API now runs in Docker with PostgreSQL through Docker Compose.
 
@@ -708,7 +520,7 @@ Replace automatic table creation with versioned database migrations, then prove 
 - Installed Alembic.
 - Initialized an Alembic migration environment.
 - Added `alembic.ini`.
-- Added the `alembic/` folder with `env.py`, `script.py.mako`, and `versions/`.
+- Added the `alembic/` folder.
 - Connected Alembic to the app’s `DATABASE_URL`.
 - Connected Alembic to SQLAlchemy’s `Base.metadata`.
 - Removed `Base.metadata.create_all()` from FastAPI startup.
@@ -777,36 +589,6 @@ Command to apply migrations:
 uv run alembic upgrade head
 ```
 
-`head` means the latest migration version.
-
-### First Migration
-
-The first migration created the `items` table.
-
-The migration contained an `upgrade()` function and a `downgrade()` function.
-
-```txt
-upgrade()   → apply the schema change
-downgrade() → undo the schema change
-```
-
-For the initial migration:
-
-```txt
-upgrade()   → create items table
-downgrade() → drop items table
-```
-
-After running:
-
-```bash
-uv run alembic upgrade head
-```
-
-PostgreSQL had the `items` table created through Alembic.
-
-This means Alembic became responsible for database schema management instead of FastAPI startup code.
-
 ### `alembic_version`
 
 Alembic creates a table called:
@@ -823,11 +605,7 @@ It tells Alembic:
 This database is currently at this schema version.
 ```
 
-This prevents Alembic from rerunning migrations that were already applied.
-
 ### Proving Schema Evolution
-
-To prove Alembic worked beyond the first migration, a new `brand` field was added to items.
 
 The model changed from:
 
@@ -862,8 +640,6 @@ The Pydantic schema was also updated:
 brand: str | None = None
 ```
 
-The service layer was updated so create and update operations handle `brand`.
-
 ### Why `brand` Was Nullable
 
 The `brand` column was added as nullable because old rows already existed in the database.
@@ -890,44 +666,6 @@ allowed old rows to safely receive:
 brand = NULL
 ```
 
-This made the migration safe for existing data.
-
-### Result
-
-Old row:
-
-```json
-{
-  "name": "Never Content Anniversary RX-7 Shirt",
-  "brand": null,
-  "category": "Shirt",
-  "color": "Gray",
-  "size": "M"
-}
-```
-
-New row:
-
-```json
-{
-  "name": "Starfall Tour Shirt",
-  "brand": "Saturn LA",
-  "category": "Shirt",
-  "color": "White",
-  "size": "M"
-}
-```
-
-This confirmed:
-
-```txt
-Old items can keep brand as null.
-New items can store a brand value.
-The API returns the brand field.
-PostgreSQL has the new brand column.
-Alembic successfully evolved the existing schema.
-```
-
 ### Docker Volume Lesson
 
 During migration setup, the local Docker PostgreSQL database was reset with:
@@ -946,24 +684,7 @@ docker compose down -v
   → stops containers and deletes the database volume
 ```
 
-The `-v` flag removes the saved PostgreSQL data volume.
-
-That means local rows, tables, and database state are deleted.
-
-This is acceptable for local development resets, but it should be used carefully because it deletes database data.
-
 ### Git Cleanup Lesson
-
-Some Python cache files were already tracked by Git.
-
-Even though `.gitignore` included:
-
-```gitignore
-__pycache__/
-*.pyc
-```
-
-Git still tracked cache files that had been committed earlier.
 
 Important rule:
 
@@ -980,13 +701,9 @@ git rm --cached -r --ignore-unmatch app/__pycache__ app/models/__pycache__ app/s
 
 After that, `.gitignore` prevents those files from being added again.
 
-### Phase 6A Status
+### Phase Status
 
-Phase 6A complete: Alembic is installed, configured, and managing the initial PostgreSQL schema.
-
-### Phase 6B Status
-
-Phase 6B complete: Alembic successfully updated an existing table by adding the optional `brand` column to items.
+Phase 6 complete: Alembic is installed, configured, and managing database schema changes.
 
 ---
 
@@ -1012,7 +729,6 @@ Prepare the backend for login and protected routes later.
 - Created `app/models/user.py`.
 - Added `UserModel` as the SQLAlchemy model for the `users` table.
 - Added `email`, `username`, `hashed_password`, `is_active`, `created_at`, and `updated_at` fields.
-- Added `username` for future searchable public profiles.
 - Created `app/schemas/user.py`.
 - Added user request and response schemas.
 - Installed `email-validator` for Pydantic `EmailStr`.
@@ -1020,7 +736,7 @@ Prepare the backend for login and protected routes later.
 - Generated and applied a migration for the `users` table.
 - Installed `pwdlib[argon2]` for password hashing.
 - Created `app/security.py`.
-- Added `hash_password()` and `verify_password()` helper functions.
+- Added `hash_password()` and `verify_password()`.
 - Created `app/services/user_service.py`.
 - Added user lookup helpers by email and username.
 - Added user creation logic.
@@ -1060,69 +776,10 @@ username
   → public/searchable identity for future profile features
 ```
 
-A user might log in with an email address, but other users should search for public profiles by username.
-
 Important rule:
 
 ```txt
 Do not expose email publicly in future public profile endpoints.
-```
-
-A future public profile response should look more like:
-
-```json
-{
-  "id": 1,
-  "username": "jim"
-}
-```
-
-not:
-
-```json
-{
-  "id": 1,
-  "email": "jim@example.com",
-  "username": "jim"
-}
-```
-
-### User Schemas
-
-User schemas define what the client can send and what the API can return.
-
-Important distinction:
-
-```txt
-models/user.py
-  → database table shape
-
-schemas/user.py
-  → API request and response shape
-```
-
-Current schemas:
-
-```txt
-UserCreate
-  → registration request
-  → email, username, password
-
-UserLogin
-  → login request schema used before switching to OAuth2 form login
-  → email, password
-
-User
-  → safe private user response
-  → id, email, username, is_active, created_at, updated_at
-
-UserPublic
-  → future public profile response
-  → id, username
-
-Token
-  → login response
-  → access_token, token_type
 ```
 
 ### Request Schema vs Response Schema Lesson
@@ -1138,9 +795,7 @@ class UserCreate(BaseModel):
 
 But the response should not include a password.
 
-This was an important bug caught during testing.
-
-The incorrect version was:
+Incorrect design:
 
 ```python
 class User(UserCreate):
@@ -1148,8 +803,6 @@ class User(UserCreate):
 ```
 
 That caused `User` to inherit the `password` field from `UserCreate`.
-
-FastAPI then expected the response to include a password and raised a response validation error.
 
 Correct design:
 
@@ -1187,7 +840,7 @@ Good:
 hashed_password = "argon2_hash_here"
 ```
 
-The registration flow receives the raw password temporarily, hashes it, and stores only the hash.
+Registration flow:
 
 ```txt
 raw password
@@ -1197,61 +850,6 @@ hash_password()
 hashed_password
   ↓
 users table
-```
-
-The project currently uses `pwdlib[argon2]` for password hashing.
-
-### `security.py`
-
-`security.py` contains low-level security helper functions.
-
-Current functions:
-
-```txt
-hash_password()
-verify_password()
-create_access_token()
-decode_access_token()
-```
-
-It handles:
-
-```txt
-password hashing
-password verification
-JWT access token creation
-JWT access token decoding
-```
-
-### User Service Layer
-
-`user_service.py` contains user-related database logic.
-
-Current responsibilities:
-
-```txt
-normalize_email()
-normalize_username()
-get_user_by_email()
-get_user_by_username()
-get_user_by_id()
-create_user()
-authenticate_user()
-```
-
-It checks existing users, normalizes inputs, hashes passwords through `security.py`, creates user rows, and verifies login credentials.
-
-Clean separation:
-
-```txt
-auth.py router
-  → HTTP concerns
-
-user_service.py
-  → user database/business logic
-
-security.py
-  → password hashing, password verification, and JWT helpers
 ```
 
 ### Registration Flow
@@ -1296,19 +894,6 @@ SQLAlchemy saves the user row
 API returns safe User response
 ```
 
-Successful response:
-
-```json
-{
-  "id": 1,
-  "email": "jim@example.com",
-  "username": "jim",
-  "is_active": true,
-  "created_at": "2026-08-01T05:12:13.071212Z",
-  "updated_at": "2026-08-01T05:12:13.071222Z"
-}
-```
-
 The response does not include:
 
 ```txt
@@ -1324,75 +909,23 @@ If a user registers with an email that already exists, the API returns:
 409 Conflict
 ```
 
-Response:
-
-```json
-{
-  "detail": "Email already registered"
-}
-```
-
 If a user registers with a username that already exists, the API returns:
 
 ```http
 409 Conflict
 ```
 
-Response:
-
-```json
-{
-  "detail": "Username already taken"
-}
-```
-
-This prevents duplicate accounts from sharing the same login email or public username.
-
-### Why `409 Conflict` Was Used
-
-`409 Conflict` means the request is valid, but it conflicts with existing server state.
-
-In this case:
+Reason:
 
 ```txt
-The email is valid,
-but another user already owns it.
-
-The username is valid,
-but another user already owns it.
+409 Conflict means the request is valid, but it conflicts with existing server state.
 ```
 
-So `409 Conflict` is more accurate than `400 Bad Request`.
-
-### Registration Test Coverage
-
-Added tests for:
-
-```txt
-POST /auth/register
-  → creates a user successfully
-
-POST /auth/register with duplicate email
-  → returns 409 Conflict
-
-POST /auth/register with duplicate username
-  → returns 409 Conflict
-```
-
-Tests also verify that the response does not expose:
-
-```txt
-password
-hashed_password
-```
-
-### Phase 7A Status
+### Phase Status
 
 Phase 7A complete: the user model, user schemas, and users table migration are complete.
 
-### Phase 7B Status
-
-Phase 7B complete: user registration works with password hashing, duplicate email validation, duplicate username validation, and safe response schemas.
+Phase 7B complete: user registration works with password hashing, duplicate validation, and safe response schemas.
 
 ---
 
@@ -1435,8 +968,7 @@ Return the current authenticated user.
 - Tested login through Swagger.
 - Tested Swagger authorization with a Bearer token.
 - Confirmed `/auth/me` returns the current authenticated user.
-- Fixed import sorting and formatting issues with Ruff.
-- Handled Docker/Swagger refresh issues while testing the new auth flow.
+- Added auth tests for login and `/auth/me`.
 
 ### Login Flow
 
@@ -1528,7 +1060,6 @@ sub
 
 exp
   → expiration time
-  → when the token stops being valid
 ```
 
 For Suot:
@@ -1537,21 +1068,13 @@ For Suot:
 sub = user.id
 ```
 
-Example:
-
-```txt
-sub = "4"
-```
-
 This means:
 
 ```txt
-This token represents user with id 4.
+This token represents a specific user account.
 ```
 
 ### Token Creation vs Token Consumption
-
-This was the main concept of this phase.
 
 Token creation:
 
@@ -1599,11 +1122,7 @@ Whoever bears this token is treated as authenticated,
 as long as the token is valid.
 ```
 
-This is why access tokens should be protected.
-
 ### `OAuth2PasswordRequestForm` vs `OAuth2PasswordBearer`
-
-Two similar names were used, but they do different jobs.
 
 ```txt
 OAuth2PasswordRequestForm
@@ -1648,16 +1167,6 @@ Simple definition:
 get_current_user() = convert a valid token into the current UserModel
 ```
 
-This matters because future protected routes can reuse it.
-
-Example future pattern:
-
-```python
-current_user: Annotated[UserModel, Depends(get_current_user)]
-```
-
-That will let item routes know which user is making the request.
-
 ### `/auth/me`
 
 Current endpoint:
@@ -1688,107 +1197,20 @@ Backend finds user in PostgreSQL
 API returns current user
 ```
 
-Successful response:
+### Auth Test Coverage
 
-```json
-{
-  "id": 4,
-  "email": "jiana@example.com",
-  "username": "weller",
-  "is_active": true,
-  "created_at": "2026-08-07T00:13:23.701647Z",
-  "updated_at": "2026-08-07T00:13:23.701650Z"
-}
-```
-
-This confirmed:
+Auth tests cover:
 
 ```txt
-Login created the token.
-Swagger sent the token as a Bearer token.
-The backend decoded the token.
-The backend read the user id from sub.
-The backend found the user.
-The backend returned the current authenticated user.
-```
+POST /auth/register
+  → creates a user successfully
 
-### Swagger Auth Flow
+POST /auth/register with duplicate email
+  → returns 409 Conflict
 
-Manual Swagger testing flow:
+POST /auth/register with duplicate username
+  → returns 409 Conflict
 
-```txt
-1. POST /auth/register
-2. POST /auth/login
-3. Copy access_token
-4. Click Authorize
-5. Paste the token
-6. Run GET /auth/me
-```
-
-In Swagger’s OAuth2 authorize popup:
-
-```txt
-username
-  → enter the user's email address
-
-password
-  → enter the user's password
-
-client_id
-  → leave blank
-
-client_secret
-  → leave blank
-```
-
-After authorization, Swagger sends:
-
-```http
-Authorization: Bearer <access_token>
-```
-
-### Bugs and Tooling Issues
-
-Several non-code-concept issues came up during this phase.
-
-```txt
-Swagger did not show /auth/me at first
-  → files had not actually saved in VS Code
-
-VS Code showed newer-file save conflicts
-  → used overwrite to save current edits
-
-Docker BuildKit hung while pulling an image
-  → Docker Desktop had an update failure
-
-Swagger authorization returned 422
-  → login endpoint expected JSON while Swagger OAuth2 expected form data
-
-Ruff warnings appeared
-  → imports were unsorted or formatting changed
-```
-
-These issues were mostly tooling and integration problems, not backend design problems.
-
-### Phase 7C Status
-
-Phase 7C complete: login works and returns JWT access tokens.
-
-### Phase 7D Status
-
-Phase 7D complete: `/auth/me` works and can identify the current user from a Bearer token.
-
-### Next Planned Phase
-
-Next phase:
-
-```txt
-Phase 7E — Auth tests for login and /auth/me
-```
-
-Planned test coverage:
-
-```txt
 POST /auth/login with valid credentials
   → returns access_token
 
@@ -1802,42 +1224,610 @@ GET /auth/me without token
   → returns 401 Unauthorized
 ```
 
-After that:
+### Phase Status
+
+Phase 7C complete: login works and returns JWT access tokens.
+
+Phase 7D complete: `/auth/me` works and can identify the current user from a Bearer token.
+
+Phase 7E complete: auth tests cover registration, login, and `/auth/me`.
+
+---
+
+## Day 10 — User-Owned Items and Row-Level Authorization
+
+### Goal
+
+Upgrade Suot from global item records to user-owned inventory.
+
+Before this phase, items existed in the database, but they were not tied to a specific user.
+
+After this phase, every item belongs to a user through:
 
 ```txt
-Phase 8 — User-owned inventory
+items.user_id
 ```
 
-Planned flow:
+This connects item ownership to authentication.
+
+Core idea:
 
 ```txt
-Add user_id to items
-  ↓
-Protect item routes
-  ↓
-Use current_user.id
-  ↓
-Only return items owned by the current user
+Authentication
+  → Who are you?
+
+Authorization
+  → Are you allowed to access this item?
 ```
+
+For Suot, authorization means:
+
+```txt
+item.user_id == current_user.id
+```
+
+### Work Completed
+
+- Added `user_id` to `ItemModel`.
+- Added a foreign key from `items.user_id` to `users.id`.
+- Generated an Alembic migration for item ownership.
+- Applied the migration to the database.
+- Updated item schemas so item responses include `user_id`.
+- Updated item service functions to accept `user_id`.
+- Updated item creation so new items are owned by the authenticated user.
+- Updated item queries so users only see their own items.
+- Updated item update logic so users can only update their own items.
+- Updated item delete logic so users can only delete their own items.
+- Protected item routes with `get_current_user()`.
+- Updated item tests to use authenticated requests with Bearer tokens.
+- Confirmed item tests pass with user-owned item behavior.
+- Practiced committing feature work and preparing it for a pull request.
+
+### Database Design
+
+The `items` table now has:
+
+```txt
+items
+├── id
+├── user_id
+├── name
+├── brand
+├── category
+├── color
+└── size
+```
+
+The relationship is:
+
+```txt
+users.id → items.user_id
+```
+
+Meaning:
+
+```txt
+One user can own many items.
+Each item belongs to one user.
+```
+
+### Shared Table, Private Inventory
+
+Suot still uses one shared `items` table.
+
+It does not create separate tables like:
+
+```txt
+jim_items
+alex_items
+mia_items
+```
+
+Instead, every item row has a `user_id`.
+
+Example:
+
+```txt
+items
+├── id: 1  user_id: 1  name: Saturn LA Shirt
+├── id: 2  user_id: 1  name: Onitsuka Tigers
+├── id: 3  user_id: 2  name: Black Hoodie
+└── id: 4  user_id: 2  name: Denim Jacket
+```
+
+The database is shared, but the API filters by the authenticated user.
+
+Simple analogy:
+
+```txt
+Shared closet = items table
+Ownership tag = user_id
+Door rule = only show items where user_id == current_user.id
+```
+
+### Why `user_id` Is Used Instead of Username
+
+Items are linked to users through `user_id`, not `username`.
+
+Reason:
+
+```txt
+user_id is stable.
+username can change.
+```
+
+If a user changes their username, their items should still belong to the same account.
+
+Important rule:
+
+```txt
+Use user_id for database relationships.
+Use username for display, search, and public profile identity.
+```
+
+### Client Does Not Send `user_id`
+
+The client should not decide item ownership.
+
+Bad request design:
+
+```json
+{
+  "user_id": 4,
+  "name": "Saturn LA Shirt",
+  "brand": "Saturn LA",
+  "category": "Shirt",
+  "color": "White",
+  "size": "M"
+}
+```
+
+This is unsafe because a malicious user could change `user_id`.
+
+Correct request design:
+
+```json
+{
+  "name": "Saturn LA Shirt",
+  "brand": "Saturn LA",
+  "category": "Shirt",
+  "color": "White",
+  "size": "M"
+}
+```
+
+The backend gets ownership from the token:
+
+```txt
+JWT access token
+  ↓
+get_current_user()
+  ↓
+current_user.id
+  ↓
+item.user_id = current_user.id
+```
+
+Ownership comes from authentication, not from client input.
+
+### Route Behavior
+
+#### `POST /items`
+
+Creates an item owned by the current authenticated user.
+
+```txt
+POST /items
+  ↓
+Require Bearer token
+  ↓
+get_current_user()
+  ↓
+Create item with user_id = current_user.id
+  ↓
+Return created item
+```
+
+#### `GET /items`
+
+Returns only the current user's items.
+
+```txt
+GET /items
+  ↓
+Require Bearer token
+  ↓
+get_current_user()
+  ↓
+Query items where user_id == current_user.id
+  ↓
+Return current user's inventory
+```
+
+#### `GET /items/{item_id}`
+
+Returns one item only if it belongs to the current user.
+
+```txt
+Find item where:
+  id == item_id
+  AND user_id == current_user.id
+```
+
+If no matching item is found, return:
+
+```http
+404 Not Found
+```
+
+#### `PUT /items/{item_id}`
+
+Updates one item only if it belongs to the current user.
+
+```txt
+Find item where:
+  id == item_id
+  AND user_id == current_user.id
+
+If found:
+  update item fields
+
+If not found:
+  return 404
+```
+
+The update request does not allow changing `user_id`.
+
+#### `DELETE /items/{item_id}`
+
+Deletes one item only if it belongs to the current user.
+
+```txt
+Find item where:
+  id == item_id
+  AND user_id == current_user.id
+
+If found:
+  delete item
+
+If not found:
+  return 404
+```
+
+### Why Inaccessible Items Return `404`
+
+If a user tries to access another user's item, the API should return:
+
+```http
+404 Not Found
+```
+
+instead of:
+
+```http
+403 Forbidden
+```
+
+Reason:
+
+```txt
+403 Forbidden can reveal that the item exists.
+404 Not Found says no accessible item was found.
+```
+
+Important mindset:
+
+```txt
+Do not ask:
+  Does item 7 exist?
+
+Ask:
+  Does item 7 exist for this current user?
+```
+
+### Service Layer Changes
+
+The item service changed from global item operations to owner-scoped operations.
+
+Old mental model:
+
+```txt
+get_items()
+get_item_by_id(item_id)
+create_item(item_data)
+update_item(item_id, item_data)
+delete_item(item_id)
+```
+
+New mental model:
+
+```txt
+get_items(db, user_id)
+get_item_by_id(db, item_id, user_id)
+create_item(db, item_data, user_id)
+update_item(db, item_id, item_data, user_id)
+delete_item(db, item_id, user_id)
+```
+
+The important rule:
+
+```txt
+Every item operation receives user_id.
+Every item query is scoped to user_id.
+```
+
+### Router Layer Changes
+
+The item router now uses:
+
+```txt
+get_current_user()
+```
+
+This gives item routes access to:
+
+```txt
+current_user.id
+```
+
+The router handles:
+
+```txt
+HTTP request
+authentication dependency
+current_user
+HTTP response
+```
+
+The service handles:
+
+```txt
+database queries
+ownership filtering
+CRUD logic
+```
+
+Important rule:
+
+```txt
+Services should not call Depends().
+Services should not import get_current_user().
+Services should receive user_id as a plain integer.
+```
+
+### Testing Changes
+
+Item tests now need authenticated requests.
+
+Before this phase:
+
+```python
+client.post("/items", json={...})
+```
+
+After this phase:
+
+```python
+client.post(
+    "/items",
+    json={...},
+    headers={"Authorization": "Bearer <token>"},
+)
+```
+
+The item tests use a helper that:
+
+```txt
+registers a test user
+logs in as that user
+extracts the access token
+returns Authorization headers
+```
+
+### `401` vs `404`
+
+A key testing lesson:
+
+```txt
+No token
+  → 401 Not authenticated
+
+Valid token, but item does not exist for this user
+  → 404 Item not found
+```
+
+The authentication gate happens before item lookup.
+
+### Test Coverage Updated
+
+The item tests now cover authenticated item behavior:
+
+```txt
+POST   /items
+  → authenticated user can create an owned item
+
+GET    /items
+  → authenticated user can list their own items
+
+GET    /items/{item_id}
+  → authenticated user can retrieve their own item
+
+GET    /items/999
+  → authenticated user receives 404 for a missing item
+
+PUT    /items/{item_id}
+  → authenticated user can update their own item
+
+PUT    /items/999
+  → authenticated user receives 404 for a missing item
+
+DELETE /items/{item_id}
+  → authenticated user can delete their own item
+
+DELETE /items/999
+  → authenticated user receives 404 for a missing item
+```
+
+### Phase Status
+
+Phase 8 complete at the first level.
+
+Current completed behavior:
+
+```txt
+Items have owners.
+Item routes require login.
+Item creation assigns ownership from current_user.id.
+Item reads are scoped to current_user.id.
+Item updates are scoped to current_user.id.
+Item deletes are scoped to current_user.id.
+Item tests pass with authenticated requests.
+```
+
+### Next Planned Phase
+
+Next improvement:
+
+```txt
+Cross-user authorization tests
+```
+
+Planned test cases:
+
+```txt
+User A creates an item.
+User B cannot retrieve User A's item.
+User B cannot update User A's item.
+User B cannot delete User A's item.
+User B's GET /items does not include User A's item.
+```
+
+This will prove that users cannot access each other's private inventory.
 
 ---
 
 ## Core Notes
 
-### `database.py`
+### Current Architecture
 
-`database.py` sets up the SQLAlchemy database connection.
-
-It creates:
+Suot API currently uses a layered backend structure:
 
 ```txt
-engine
-SessionLocal
-Base
-get_db()
+Router
+  ↓
+Service
+  ↓
+SQLAlchemy Session
+  ↓
+Database
 ```
 
-It is responsible for database infrastructure, not item logic.
+The router handles HTTP concerns.
+
+The service handles business logic and database operations.
+
+The SQLAlchemy models define database tables.
+
+The Pydantic schemas define request and response shapes.
+
+The database session handles communication with the database.
+
+### Current Docker Architecture
+
+```txt
+Docker Compose
+├── api container
+│   └── FastAPI app
+│
+└── db container
+    └── PostgreSQL database
+```
+
+The API and database are separate services.
+
+The API talks to PostgreSQL through `DATABASE_URL`.
+
+### Current Auth Flow
+
+```txt
+/register
+  → create account
+
+/login
+  → verify credentials
+  → create JWT access token
+
+/auth/me
+  → consume JWT access token
+  → identify current user
+```
+
+### Current Item Authorization Flow
+
+```txt
+Request to /items
+  ↓
+Require Bearer token
+  ↓
+get_current_user()
+  ↓
+current_user.id
+  ↓
+Query only rows where item.user_id == current_user.id
+```
+
+This means:
+
+```txt
+Authentication identifies the user.
+Authorization decides which item rows the user can access.
+```
+
+### Important Backend Concepts Learned
+
+```txt
+FastAPI
+  → API framework
+
+Router
+  → HTTP route layer
+
+Pydantic schema
+  → request and response validation
+
+Service layer
+  → application logic and database operations
+
+SQLAlchemy model
+  → Python representation of a database table
+
+SQLAlchemy Session
+  → active conversation with the database
+
+PostgreSQL
+  → persistent relational database server
+
+Alembic
+  → version control for database schema changes
+
+Docker
+  → container runtime
+
+Docker Compose
+  → runs API and database services together
+
+JWT
+  → signed access token used to identify logged-in users
+
+Bearer token
+  → token sent through the Authorization header
+
+Authentication
+  → proves who the user is
+
+Authorization
+  → controls what the user can access
+```
 
 ### `ItemModel`
 
@@ -1855,21 +1845,24 @@ to:
 SQL table items
 ```
 
-Simple definition:
-
-```txt
-ItemModel = blueprint for the items table
-```
-
 Current fields:
 
 ```txt
 id
+user_id
 name
 brand
 category
 color
 size
+```
+
+`user_id` identifies which user owns the item.
+
+Database relationship:
+
+```txt
+items.user_id → users.id
 ```
 
 ### `UserModel`
@@ -1886,12 +1879,6 @@ to:
 
 ```txt
 SQL table users
-```
-
-Simple definition:
-
-```txt
-UserModel = blueprint for the users table
 ```
 
 Current fields:
@@ -1945,79 +1932,6 @@ Simple definition:
 Session = active conversation with the database
 ```
 
-### `db.get()`
-
-```python
-db.get(ItemModel, item_id)
-```
-
-Finds one row by primary key.
-
-Example:
-
-```txt
-Find the item where id == item_id
-```
-
-Current user-related use:
-
-```python
-db.get(UserModel, user_id)
-```
-
-This finds one user by primary key.
-
-### `select()`
-
-```python
-select(ItemModel)
-```
-
-Builds a database query.
-
-Current use:
-
-```txt
-Select all items from the items table
-```
-
-Future use:
-
-```python
-select(ItemModel).where(ItemModel.category == "jacket")
-```
-
-This would select only items where the category is `"jacket"`.
-
-### `db.scalar()` vs `db.scalars()`
-
-```python
-db.scalar(statement)
-```
-
-Executes a SELECT statement and returns one scalar result.
-
-This is useful for queries where only one row is expected.
-
-Example use:
-
-```txt
-Find one user by email.
-Find one user by username.
-```
-
-```python
-db.scalars(statement)
-```
-
-Executes a SELECT statement and returns multiple model objects from the result.
-
-Example use:
-
-```txt
-List all items.
-```
-
 ### `db.add()`
 
 ```python
@@ -2027,40 +1941,6 @@ db.add(item)
 Stages a new object for insertion into the database.
 
 It does not permanently save until `db.commit()` is called.
-
-### Field Assignment
-
-Example:
-
-```python
-item.name = item_data.name
-item.brand = item_data.brand
-item.category = item_data.category
-item.color = item_data.color
-item.size = item_data.size
-```
-
-This changes the values on an existing database object.
-
-SQLAlchemy tracks those changes.
-
-When `db.commit()` is called, the updated values are saved to the database.
-
-### `db.delete()`
-
-```python
-db.delete(item)
-```
-
-Stages an already-loaded object for deletion.
-
-Typical flow:
-
-```txt
-Find item with db.get()
-If item exists, pass it to db.delete()
-Call db.commit()
-```
 
 ### `db.commit()`
 
@@ -2095,7 +1975,53 @@ created_at
 updated_at
 ```
 
-After `db.refresh(item)`, Python has the latest version of that object.
+### `db.delete()`
+
+```python
+db.delete(item)
+```
+
+Stages an already-loaded object for deletion.
+
+Typical flow:
+
+```txt
+Find item.
+If item exists, pass it to db.delete().
+Call db.commit().
+```
+
+### `select()`
+
+```python
+select(ItemModel)
+```
+
+Builds a database query.
+
+Example owner-scoped item query:
+
+```txt
+Select items where ItemModel.user_id == current_user.id
+```
+
+### `db.scalar()` vs `db.scalars()`
+
+```python
+db.scalar(statement)
+```
+
+Executes a SELECT statement and returns one result.
+
+This is useful when only one row is expected.
+
+```python
+db.scalars(statement)
+```
+
+Executes a SELECT statement and returns multiple model objects.
+
+This is useful when listing rows.
 
 ### Alembic
 
@@ -2119,32 +2045,6 @@ create index
 add constraint
 ```
 
-### Alembic Migration
-
-An Alembic migration is a versioned file that changes the database schema.
-
-Migration files live in:
-
-```txt
-alembic/versions/
-```
-
-Each migration has:
-
-```txt
-revision ID
-down_revision
-upgrade()
-downgrade()
-```
-
-Simple meaning:
-
-```txt
-upgrade()   → apply the database change
-downgrade() → undo the database change
-```
-
 ### `alembic upgrade head`
 
 ```bash
@@ -2158,40 +2058,6 @@ Simple definition:
 ```txt
 alembic upgrade head = update the database to the latest schema version
 ```
-
-### `alembic_version`
-
-`alembic_version` is a table created by Alembic.
-
-It stores the current migration version applied to the database.
-
-This lets Alembic know which migrations have already run.
-
-### Nullable Columns
-
-A nullable column allows a database value to be empty.
-
-In PostgreSQL, this empty value is:
-
-```txt
-NULL
-```
-
-For the `brand` field:
-
-```python
-brand: Mapped[str | None] = mapped_column(String(100), nullable=True)
-```
-
-This means:
-
-```txt
-brand can be a string
-or
-brand can be None / NULL
-```
-
-This was important because old rows already existed before the `brand` column was added.
 
 ### Request Schemas vs Response Schemas
 
@@ -2221,8 +2087,6 @@ Important rule:
 Secrets can exist in request schemas when needed.
 Secrets should not exist in response schemas.
 ```
-
-This prevents the API from accidentally returning passwords or password hashes.
 
 ### Password Hashing
 
@@ -2263,8 +2127,6 @@ create_access_token()
 decode_access_token()
 ```
 
-It does not decide whether a user should be created.
-
 It handles:
 
 ```txt
@@ -2289,8 +2151,6 @@ get_user_by_id()
 create_user()
 authenticate_user()
 ```
-
-It checks existing users, normalizes inputs, hashes passwords through `security.py`, creates user rows, and verifies login credentials.
 
 ### `auth.py`
 
@@ -2335,6 +2195,18 @@ Invalid email or password
 Could not validate credentials
 Missing Bearer token
 Expired or invalid token
+```
+
+### `404 Not Found`
+
+`404 Not Found` means the requested resource could not be found.
+
+For private user-owned items, Suot also uses `404` when the item exists but does not belong to the current user.
+
+Reason:
+
+```txt
+Do not reveal whether another user's private item exists.
 ```
 
 ### JWT
@@ -2420,12 +2292,12 @@ client = TestClient(app)
 This lets tests make requests like:
 
 ```python
-client.post("/items", json={...})
+client.post("/items", json={...}, headers={...})
 client.post("/auth/register", json={...})
 client.post("/auth/login", data={...})
 client.get("/auth/me", headers={...})
-client.put("/items/1", json={...})
-client.delete("/items/1")
+client.put("/items/1", json={...}, headers={...})
+client.delete("/items/1", headers={...})
 ```
 
 Simple definition:
@@ -2490,16 +2362,42 @@ Example:
 ```bash
 git switch main
 git pull
-git switch -c feature/dockerize-api
+git switch -c feature/user-owned-items
 ```
 
 A good workflow is:
 
 ```txt
-branch → build → test → commit → merge → push
+branch → build → test → commit → push → pull request → merge
 ```
 
 This keeps the project organized and prevents half-working infrastructure changes from breaking the stable version.
+
+### Pull Requests
+
+A pull request is a formal review step before merging a feature branch into `main`.
+
+Current workflow:
+
+```txt
+Create feature branch
+  ↓
+Build feature
+  ↓
+Run tests
+  ↓
+Commit changes
+  ↓
+Push branch to GitHub
+  ↓
+Open pull request
+  ↓
+Review files changed
+  ↓
+Merge into main
+```
+
+This is useful even for a solo project because it creates a professional project history.
 
 ### Dockerfile
 
@@ -2510,8 +2408,6 @@ Simple definition:
 ```txt
 Dockerfile = build instructions for the API container
 ```
-
-In this project, the Dockerfile starts from a Python image, installs dependencies with `uv`, copies the app code, and starts FastAPI with Uvicorn.
 
 ### Docker Image
 
@@ -2648,98 +2544,61 @@ SQLAlchemy Session
 Database
 ```
 
-The router handles HTTP concerns.
-
-The service handles item logic.
-
-The auth router handles registration, login, and current-user endpoints.
-
-The item service handles item CRUD logic.
-
-The user service handles user lookup, duplicate account checks, password hashing, user creation, and login credential verification.
-
-The SQLAlchemy models define database tables.
-
-The database session handles communication with the database.
-
-Pydantic schemas define the shape of incoming and outgoing API data.
-
 The project moved from temporary in-memory storage to persistent SQLite storage.
 
 The project then moved from SQLite to PostgreSQL running as a separate Docker service.
 
-The project now has automated tests for item CRUD endpoints and user registration behavior.
+The project now runs with Docker Compose using an API container and a PostgreSQL container.
 
-The project also has an application configuration layer, which allows the database backend to change through `DATABASE_URL` without rewriting the router or service layer.
+The project uses Alembic for database migrations, which means schema changes are versioned, explicit, and applied intentionally.
 
-The project can run through Docker Compose with both the FastAPI API and PostgreSQL database as separate containers.
+The project supports user registration with hashed passwords.
 
-The project uses Alembic for database migrations, which means schema changes are versioned, explicit, and applied intentionally instead of being created automatically on app startup.
+The project supports login with JWT access tokens.
 
-The project successfully proved schema evolution by adding an optional `brand` column to the existing `items` table.
+The project supports `/auth/me`, which identifies the current authenticated user from a Bearer token.
 
-The project now has a `users` table and can register users safely by hashing passwords and returning safe user responses.
+The project supports user-owned inventory.
 
-The project now supports registration, login, JWT access token creation, JWT access token decoding, and `/auth/me`.
+Items are no longer global anonymous records.
 
-The current authentication flow is:
+Each item has:
 
 ```txt
-/register
-  → create account
-
-/login
-  → verify credentials
-  → create JWT access token
-
-/auth/me
-  → consume JWT access token
-  → identify current user
+user_id
 ```
 
-Current Docker architecture:
+which links it to the user who owns it.
+
+The current item authorization flow is:
 
 ```txt
-Docker Compose
-├── api container
-│   └── FastAPI app
-│
-└── db container
-    └── PostgreSQL database
-```
-
-The project now uses Git branches for larger changes.
-
-The current Git workflow is:
-
-```txt
-branch → build → test → commit → merge → push
-```
-
-The most important system design lesson so far is that backend systems are made of separate services that communicate through defined interfaces.
-
-FastAPI handles the API behavior.
-
-PostgreSQL stores the data.
-
-Alembic manages database schema changes.
-
-SQLAlchemy maps Python models to database tables.
-
-Pydantic controls request and response shapes.
-
-Docker Compose runs the services together in a reproducible local environment.
-
-Git branches keep major changes isolated until they are tested and ready to merge.
-
-The next major backend concept is user-owned inventory:
-
-```txt
-items.user_id
+Request to /items
+  ↓
+Require Bearer token
+  ↓
+get_current_user()
   ↓
 current_user.id
   ↓
-users can only access their own items
+Query only rows where item.user_id == current_user.id
 ```
 
-This is where authentication starts supporting authorization.
+This means:
+
+```txt
+Authentication identifies the user.
+Authorization decides which item rows the user can access.
+```
+
+The next major backend improvement is stronger cross-user authorization testing:
+
+```txt
+User A creates item
+  ↓
+User B tries to access it
+  ↓
+API returns 404
+```
+
+This will prove that users cannot access each other's private inventory.
