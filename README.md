@@ -39,6 +39,7 @@ The goal of this project is to deeply understand backend API development, includ
 - Foreign key from `items.user_id` to `users.id`
 - Protected item routes
 - Item routes scoped to the current authenticated user
+- Cross-user authorization tests
 - User database model
 - User request and response schemas
 - User registration endpoint
@@ -676,6 +677,37 @@ Ask:
 
 ---
 
+## Cross-User Authorization Testing
+
+Suot includes tests that prove item ownership isolation across users.
+
+The main tested scenario is:
+
+```txt
+Create User A
+Create User B
+User A creates an item
+User B tries to access User A's item
+API denies access
+```
+
+The authorization tests prove:
+
+```txt
+User B does not see User A's item in GET /items.
+User B cannot retrieve User A's item by ID.
+User B cannot update User A's item.
+User B cannot delete User A's item.
+```
+
+This matters because user-owned inventory is a security boundary.
+
+The backend does not only test that authenticated CRUD works.
+
+It also tests that authenticated users cannot access each other's private item data.
+
+---
+
 ## Auth Design
 
 Current authentication design:
@@ -973,7 +1005,7 @@ Production secrets should come from secure environment variables or a secret man
 
 Suot API uses Alembic to manage database schema changes.
 
-Before Alembic, the app used SQLAlchemy’s `Base.metadata.create_all()` to create tables automatically when the API started.
+Before Alembic, the app used SQLAlchemy's `Base.metadata.create_all()` to create tables automatically when the API started.
 
 That was useful for learning, but it is not ideal for a growing backend project because schema changes should be explicit, versioned, and reviewable.
 
@@ -1223,7 +1255,7 @@ Current tests run locally and use an isolated test database.
 
 ```txt
 pytest locally
-  → tests CRUD behavior and route/service logic
+  → tests CRUD behavior, auth behavior, and route/service logic
 
 Docker Compose manually
   → tests the containerized API and PostgreSQL runtime
@@ -1248,16 +1280,19 @@ PUT    /items/{item_id} with authenticated user
 PUT    /items/999 with authenticated user
 DELETE /items/{item_id} with authenticated user
 DELETE /items/999 with authenticated user
+
+GET    /items does not show another user's items
+GET    /items/{item_id} rejects another user's item
+PUT    /items/{item_id} rejects another user's item
+DELETE /items/{item_id} rejects another user's item
 ```
 
-Planned authorization tests:
+Next planned tests:
 
 ```txt
-User A creates an item.
-User B cannot retrieve User A's item.
-User B cannot update User A's item.
-User B cannot delete User A's item.
-User B's GET /items does not include User A's item.
+Tests for richer item fields
+Tests for item analytics
+Tests for filtering, sorting, and pagination
 ```
 
 ---
@@ -1342,6 +1377,9 @@ feature/user-registration
 feature/user-login
 feature/auth-me
 feature/user-owned-items
+feature/item-details
+feature/closet-analytics
+feature/item-filtering-pagination
 feature/recommendations
 fix/item-not-found
 docs/update-devlog
@@ -1368,6 +1406,8 @@ Merge only after the feature works.
 
 ## Roadmap
 
+### Chapter 1 — Backend Foundations
+
 - Phase 1: In-memory item CRUD — DONE
 - Phase 2: SQLite persistence with SQLAlchemy — DONE
 - Phase 3: Code review, cleanup, and item CRUD tests — DONE
@@ -1376,16 +1416,56 @@ Merge only after the feature works.
 - Phase 5: Dockerize the FastAPI API — DONE
 - Phase 6A: Alembic setup and initial migration — DONE
 - Phase 6B: Schema evolution with `brand` field — DONE
+
+### Chapter 2 — Authentication and User-Owned Data
+
 - Phase 7A: User model and users table migration — DONE
 - Phase 7B: User registration — DONE
 - Phase 7C: Login and JWT access tokens — DONE
 - Phase 7D: Protected auth route with `/auth/me` — DONE
 - Phase 7E: Auth tests for login and `/auth/me` — DONE
 - Phase 8: User-owned item inventory — DONE
-- Phase 8B: Cross-user authorization tests — NEXT
-- Phase 9: Richer item fields such as price and purchase date
-- Phase 10: Recommendation logic
-- Phase 11: Deployment
+- Phase 8B: Cross-user authorization tests — DONE
+
+### Chapter 3 — Product-Grade Inventory API
+
+- Phase 9: Richer item fields such as price, purchase date, condition, and notes — NEXT
+- Phase 10: Closet analytics endpoint
+- Phase 11: Item filtering, sorting, and pagination
+- Phase 12: API validation and error-handling polish
+
+### Chapter 4 — CI, Deployment, and Release Workflow
+
+- Phase 13: GitHub Actions CI checks
+- Phase 14: Production-ready environment configuration
+- Phase 15: Initial deployment
+- Phase 16: Deployment documentation and release checklist
+
+### Chapter 5 — Intelligence and Personalization
+
+- Phase 17: Rule-based wardrobe recommendations
+- Phase 18: Outfit generation logic
+- Phase 19: Wardrobe gap analysis
+- Phase 20: Spending insights and duplicate-purchase warnings
+- Phase 21: Recommendation feedback loop
+
+### Chapter 6 — Production Hardening and Scale
+
+- Phase 22: PostgreSQL integration tests
+- Phase 23: Redis caching
+- Phase 24: Rate limiting
+- Phase 25: Structured logging and observability
+- Phase 26: Background jobs
+- Phase 27: Performance testing
+
+### Future Chapters
+
+- Event-driven analytics
+- Image uploads and object storage
+- Search and indexing
+- Refresh tokens and account security
+- Multi-service recommendation architecture
+- Public profiles and social wardrobe features
 
 ---
 
@@ -1414,6 +1494,7 @@ nullable columns
 foreign keys
 user-owned data
 row-level authorization
+cross-user authorization testing
 Docker images
 Docker containers
 Docker Compose services
@@ -1461,6 +1542,7 @@ auth tests
 user-owned item inventory
 protected item routes
 authenticated item tests
+cross-user authorization tests
 ```
 
 Current item authorization behavior:
@@ -1472,20 +1554,23 @@ Item creation assigns ownership from current_user.id.
 Item reads are scoped to current_user.id.
 Item updates are scoped to current_user.id.
 Item deletes are scoped to current_user.id.
+Users cannot access another user's item even if they know the item ID.
 ```
 
 Next planned backend work:
 
 ```txt
-Cross-user authorization tests
-  → User A creates item
-  → User B cannot access it
-
 Richer item fields
   → price
   → purchase_date
   → condition
   → notes
+
+Closet analytics
+  → total closet value
+  → item counts by category
+  → item counts by brand
+  → spending insight
 
 Recommendation logic
   → recommend outfits or items based on inventory data
@@ -1499,6 +1584,9 @@ Authentication
 
 Authorization
   → What data are you allowed to access?
+
+Inventory analytics
+  → What does your closet contain?
 
 Recommendation
   → What useful insight can the system generate from your inventory?

@@ -1640,7 +1640,7 @@ The authentication gate happens before item lookup.
 
 ### Test Coverage Updated
 
-The item tests now cover authenticated item behavior:
+The item tests cover authenticated item behavior:
 
 ```txt
 POST   /items
@@ -1670,7 +1670,7 @@ DELETE /items/999
 
 ### Phase Status
 
-Phase 8 complete at the first level.
+Phase 8 complete: user-owned item inventory works at the first level.
 
 Current completed behavior:
 
@@ -1684,25 +1684,205 @@ Item deletes are scoped to current_user.id.
 Item tests pass with authenticated requests.
 ```
 
-### Next Planned Phase
+---
 
-Next improvement:
+## Day 11 — Cross-User Authorization Tests
+
+### Goal
+
+Strengthen the authorization layer by proving that one authenticated user cannot access another authenticated user's inventory.
+
+Before this phase, the item tests proved that:
 
 ```txt
-Cross-user authorization tests
+A logged-in user can create, read, update, and delete their own items.
 ```
 
-Planned test cases:
+After this phase, the tests also prove that:
+
+```txt
+User A's items are isolated from User B.
+```
+
+This is the difference between testing authenticated CRUD and testing real authorization.
+
+### Work Completed
+
+- Added helper logic for creating authenticated test users with different emails and usernames.
+- Added a test proving User B does not see User A's items in `GET /items`.
+- Added a test proving User B cannot retrieve User A's item by ID.
+- Added a test proving User B cannot update User A's item.
+- Added a test proving User B cannot delete User A's item.
+- Confirmed item authorization tests pass.
+- Merged the authorization test branch back into `main`.
+
+### Why These Tests Matter
+
+User-owned items are a security feature.
+
+It is not enough for the code to look correct.
+
+The test suite should prove the access rule:
+
+```txt
+item.user_id == current_user.id
+```
+
+Without cross-user tests, the project only proves that one authenticated user can use item routes.
+
+With cross-user tests, the project proves that item data is private between users.
+
+### Main Authorization Rule
+
+The core rule is:
+
+```txt
+A user can access an item only when:
+  item.user_id == current_user.id
+```
+
+This rule applies to:
+
+```txt
+GET /items
+GET /items/{item_id}
+PUT /items/{item_id}
+DELETE /items/{item_id}
+```
+
+### Test Scenario
+
+The repeated test pattern is:
+
+```txt
+Create User A
+Create User B
+User A creates an item
+User B tries to access User A's item
+API denies access
+```
+
+Example:
+
+```txt
+User A creates item with id 1.
+User B sends GET /items/1.
+API returns 404 Item not found.
+```
+
+### Why `404` Is Expected
+
+When User B tries to access User A's item, the API returns:
+
+```http
+404 Not Found
+```
+
+This is intentional.
+
+The API does not say:
+
+```http
+403 Forbidden
+```
+
+Reason:
+
+```txt
+403 Forbidden can reveal that the private item exists.
+404 Not Found says no accessible item was found.
+```
+
+Important mindset:
+
+```txt
+The route does not ask:
+  Does this item exist globally?
+
+The route asks:
+  Does this item exist for the current user?
+```
+
+### Tests Added
+
+The new tests cover:
 
 ```txt
 User A creates an item.
-User B cannot retrieve User A's item.
-User B cannot update User A's item.
-User B cannot delete User A's item.
 User B's GET /items does not include User A's item.
+
+User A creates an item.
+User B cannot retrieve it with GET /items/{item_id}.
+
+User A creates an item.
+User B cannot update it with PUT /items/{item_id}.
+
+User A creates an item.
+User B cannot delete it with DELETE /items/{item_id}.
 ```
 
-This will prove that users cannot access each other's private inventory.
+### `GET /items` Isolation
+
+Expected behavior:
+
+```txt
+User A creates an item.
+User B requests GET /items.
+User B receives an empty list.
+```
+
+This proves the list endpoint is scoped by owner.
+
+### `GET /items/{item_id}` Isolation
+
+Expected behavior:
+
+```txt
+User A creates an item.
+User B requests GET /items/{item_id}.
+API returns 404.
+```
+
+This proves knowing another user's item ID is not enough to access it.
+
+### `PUT /items/{item_id}` Isolation
+
+Expected behavior:
+
+```txt
+User A creates an item.
+User B requests PUT /items/{item_id}.
+API returns 404.
+```
+
+This proves another user cannot modify someone else's item.
+
+### `DELETE /items/{item_id}` Isolation
+
+Expected behavior:
+
+```txt
+User A creates an item.
+User B requests DELETE /items/{item_id}.
+API returns 404.
+```
+
+This proves another user cannot delete someone else's item.
+
+### Phase Status
+
+Phase 8B complete: cross-user authorization tests prove item ownership isolation.
+
+Current authorization guarantees:
+
+```txt
+Users can create their own items.
+Users can list only their own items.
+Users can retrieve only their own items.
+Users can update only their own items.
+Users can delete only their own items.
+Users cannot access another user's item even if they know the item ID.
+```
 
 ---
 
@@ -1827,6 +2007,9 @@ Authentication
 
 Authorization
   → controls what the user can access
+
+Cross-user authorization tests
+  → prove private data isolation between users
 ```
 
 ### `ItemModel`
@@ -2591,14 +2774,23 @@ Authentication identifies the user.
 Authorization decides which item rows the user can access.
 ```
 
-The next major backend improvement is stronger cross-user authorization testing:
+The project now has cross-user authorization tests proving that:
 
 ```txt
-User A creates item
-  ↓
-User B tries to access it
-  ↓
-API returns 404
+User A can create an item.
+User B cannot see User A's item in their item list.
+User B cannot retrieve User A's item by ID.
+User B cannot update User A's item.
+User B cannot delete User A's item.
 ```
 
-This will prove that users cannot access each other's private inventory.
+The next major backend improvement is richer item data:
+
+```txt
+price
+purchase_date
+condition
+notes
+```
+
+This will make Suot more useful as a real fashion inventory and spending-awareness system.
