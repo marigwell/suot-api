@@ -44,6 +44,29 @@ def get_auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def get_auth_headers_for_user(email: str, password: str) -> dict[str, str]:
+    client.post(
+        "/auth/register",
+        json={
+            "email": email,
+            "username": email.split("@")[0],
+            "password": "password123",
+        },
+    )
+
+    login_response = client.post(
+        "/auth/login",
+        data={
+            "username": email,
+            "password": "password123",
+        },
+    )
+
+    token = login_response.json()["access_token"]
+
+    return {"Authorization": f"Bearer {token}"}
+
+
 def override_get_db() -> Generator[Session, None, None]:
     db = TestingSessionLocal()
     try:
@@ -277,6 +300,122 @@ def test_delete_item_not_found():
         "/items/999",
         headers=headers,
     )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Item not found"}
+
+
+def test_users_only_see_their_own_items():
+    """
+    Test that one user's items do not appear on another user's inventory.
+    """
+    user_one_headers = get_auth_headers_for_user("jim@example.com", "jim")
+    user_two_headers = get_auth_headers_for_user("sam@example.com", "sam")
+
+    client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "Black",
+            "size": "M",
+        },
+        headers=user_one_headers,
+    )
+
+    response = client.get("/items", headers=user_two_headers)
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_user_cannot_get_another_users_item():
+    """
+    Tests that one user cannot get another user's item despite knowing the item ID
+    """
+    user_one_headers = get_auth_headers_for_user("jim@example.com", "jim")
+    user_two_headers = get_auth_headers_for_user("alex@example.com", "alex")
+
+    create_response = client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+        },
+        headers=user_one_headers,
+    )
+
+    item_id = create_response.json()["id"]
+
+    response = client.get(f"/items/{item_id}", headers=user_two_headers)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Item not found"}
+
+
+def test_user_cannot_update_another_users_item():
+    """
+    Test that a user cannot update user's item
+    """
+    user_one_headers = get_auth_headers_for_user("jim@example.com", "jim")
+    user_two_headers = get_auth_headers_for_user("sam@example.com", "sam")
+
+    create_response = client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "Black",
+            "size": "M",
+        },
+        headers=user_one_headers,
+    )
+
+    item_id = create_response.json()["id"]
+
+    response = client.put(
+        f"/items/{item_id}",
+        json={
+            "name": "Stolen Update",
+            "brand": "Fake Brand",
+            "category": "Jacket",
+            "color": "Red",
+            "size": "L",
+        },
+        headers=user_two_headers,
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Item not found"}
+
+
+def test_user_cannot_delete_another_users_item():
+    """
+    Test that a user cannot delete another user's item.
+    """
+    user_one_header = get_auth_headers_for_user("jim@example.com", "jim")
+    user_two_header = get_auth_headers_for_user("sam@example.com", "sam")
+
+    create_response = client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "Black",
+            "size": "M",
+        },
+        headers=user_one_header,
+    )
+
+    item_id = create_response.json()["id"]
+
+    response = client.delete(f"/items/{item_id}", headers=user_two_header)
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Item not found"}
