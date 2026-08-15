@@ -1,5 +1,5 @@
 # /services/item_service.py
-# The service should handle database operation, item creation, item update, item deletion
+# The service should handle database operations, item creation, item update, and item deletion.
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -37,6 +37,10 @@ def create_item(
         category=item_data.category,
         color=item_data.color,
         size=item_data.size,
+        price=item_data.price,
+        purchase_date=item_data.purchase_date,
+        condition=item_data.condition,
+        notes=item_data.notes,
     )
 
     db.add(item)
@@ -62,6 +66,10 @@ def update_item(
     item.category = item_data.category
     item.color = item_data.color
     item.size = item_data.size
+    item.price = item_data.price
+    item.purchase_date = item_data.purchase_date
+    item.condition = item_data.condition
+    item.notes = item_data.notes
 
     db.commit()
     db.refresh(item)

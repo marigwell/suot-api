@@ -22,34 +22,15 @@ TestingSessionLocal = sessionmaker(
 
 
 def get_auth_headers() -> dict[str, str]:
-    client.post(
-        "/auth/register",
-        json={
-            "email": "jim@example.com",
-            "username": "jim",
-            "password": "password123",
-        },
-    )
-
-    login_response = client.post(
-        "/auth/login",
-        data={
-            "username": "jim@example.com",
-            "password": "password123",
-        },
-    )
-
-    token = login_response.json()["access_token"]
-
-    return {"Authorization": f"Bearer {token}"}
+    return get_auth_headers_for_user("jim@example.com", "jim")
 
 
-def get_auth_headers_for_user(email: str, password: str) -> dict[str, str]:
+def get_auth_headers_for_user(email: str, username: str) -> dict[str, str]:
     client.post(
         "/auth/register",
         json={
             "email": email,
-            "username": email.split("@")[0],
+            "username": username,
             "password": "password123",
         },
     )
@@ -92,11 +73,15 @@ def test_create_item():
     response = client.post(
         "/items",
         json={
-            "name": "Carbon Core - Lucy Racing Jacket",
-            "brand": "Carbon Core",
-            "category": "Jacket",
-            "color": "Black",
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "White",
             "size": "M",
+            "price": "120.00",
+            "purchase_date": "2026-08-14",
+            "condition": "new",
+            "notes": "Bought for testing richer item fields.",
         },
         headers=get_auth_headers(),
     )
@@ -105,11 +90,15 @@ def test_create_item():
 
     data = response.json()
 
-    assert data["name"] == "Carbon Core - Lucy Racing Jacket"
-    assert data["brand"] == "Carbon Core"
-    assert data["category"] == "Jacket"
-    assert data["color"] == "Black"
+    assert data["name"] == "Saturn LA Shirt"
+    assert data["brand"] == "Saturn LA"
+    assert data["category"] == "Shirt"
+    assert data["color"] == "White"
     assert data["size"] == "M"
+    assert data["price"] == "120.00"
+    assert data["purchase_date"] == "2026-08-14"
+    assert data["condition"] == "new"
+    assert data["notes"] == "Bought for testing richer item fields."
     assert "id" in data
     assert "user_id" in data
 
@@ -127,6 +116,10 @@ def test_get_items():
             "category": "Pants",
             "color": "Gray",
             "size": "S",
+            "price": "138.00",
+            "purchase_date": "2026-08-14",
+            "condition": "new",
+            "notes": "Bought to climb at First Ascent.",
         },
         headers=headers,
     )
@@ -142,6 +135,10 @@ def test_get_items():
     assert data[0]["category"] == "Pants"
     assert data[0]["color"] == "Gray"
     assert data[0]["size"] == "S"
+    assert data[0]["price"] == "138.00"
+    assert data[0]["purchase_date"] == "2026-08-14"
+    assert data[0]["condition"] == "new"
+    assert data[0]["notes"] == "Bought to climb at First Ascent."
     assert "id" in data[0]
     assert "user_id" in data[0]
 
@@ -159,6 +156,10 @@ def test_get_item_by_id():
             "category": "T-Shirt",
             "color": "Green",
             "size": "XL",
+            "price": "49.99",
+            "purchase_date": "2026-05-28",
+            "condition": "excellent",
+            "notes": "Gifted from my cousin.",
         },
         headers=headers,
     )
@@ -176,6 +177,10 @@ def test_get_item_by_id():
     assert data["category"] == "T-Shirt"
     assert data["color"] == "Green"
     assert data["size"] == "XL"
+    assert data["price"] == "49.99"
+    assert data["purchase_date"] == "2026-05-28"
+    assert data["condition"] == "excellent"
+    assert data["notes"] == "Gifted from my cousin."
     assert "user_id" in data
 
 
@@ -208,6 +213,10 @@ def test_update_item():
             "category": "T-Shirt",
             "color": "Green",
             "size": "XL",
+            "price": "49.99",
+            "purchase_date": "2026-05-28",
+            "condition": "excellent",
+            "notes": "Gifted from my cousin.",
         },
         headers=headers,
     )
@@ -222,6 +231,10 @@ def test_update_item():
             "category": "T-Shirt",
             "color": "Blue",
             "size": "XS",
+            "price": "49.99",
+            "purchase_date": "2026-05-28",
+            "condition": "good",
+            "notes": "Signs of usage.",
         },
         headers=headers,
     )
@@ -236,6 +249,10 @@ def test_update_item():
     assert data["category"] == "T-Shirt"
     assert data["color"] == "Blue"
     assert data["size"] == "XS"
+    assert data["price"] == "49.99"
+    assert data["purchase_date"] == "2026-05-28"
+    assert data["condition"] == "good"
+    assert data["notes"] == "Signs of usage."
 
 
 def test_update_item_not_found():
@@ -359,7 +376,7 @@ def test_user_cannot_get_another_users_item():
 
 def test_user_cannot_update_another_users_item():
     """
-    Test that a user cannot update user's item
+    Test that a user cannot update another user's item
     """
     user_one_headers = get_auth_headers_for_user("jim@example.com", "jim")
     user_two_headers = get_auth_headers_for_user("sam@example.com", "sam")
@@ -398,8 +415,8 @@ def test_user_cannot_delete_another_users_item():
     """
     Test that a user cannot delete another user's item.
     """
-    user_one_header = get_auth_headers_for_user("jim@example.com", "jim")
-    user_two_header = get_auth_headers_for_user("sam@example.com", "sam")
+    user_one_headers = get_auth_headers_for_user("jim@example.com", "jim")
+    user_two_headers = get_auth_headers_for_user("sam@example.com", "sam")
 
     create_response = client.post(
         "/items",
@@ -410,12 +427,12 @@ def test_user_cannot_delete_another_users_item():
             "color": "Black",
             "size": "M",
         },
-        headers=user_one_header,
+        headers=user_one_headers,
     )
 
     item_id = create_response.json()["id"]
 
-    response = client.delete(f"/items/{item_id}", headers=user_two_header)
+    response = client.delete(f"/items/{item_id}", headers=user_two_headers)
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Item not found"}

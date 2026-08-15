@@ -2,6 +2,9 @@
 
 from pydantic import BaseModel, ConfigDict
 
+from datetime import date
+from decimal import Decimal
+
 
 class ItemCreate(BaseModel):
     name: str
@@ -9,6 +12,10 @@ class ItemCreate(BaseModel):
     category: str
     color: str
     size: str
+    price: Decimal | None = None
+    purchase_date: date | None = None
+    condition: str | None = None
+    notes: str | None = None
 
 
 class Item(ItemCreate):
