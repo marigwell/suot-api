@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.models.item import ItemModel
 from app.schemas.item import ItemCreate
 
+from decimal import Decimal
+
 
 def get_items(db: Session, user_id: int) -> list[ItemModel]:
     statement = select(ItemModel).where(ItemModel.user_id == user_id)
@@ -87,3 +89,33 @@ def delete_item(db: Session, item_id: int, user_id: int) -> bool:
     db.commit()
 
     return True
+
+
+def get_item_stats(db: Session, user_id: int) -> dict:
+    items = get_items(db, user_id)
+
+    total_items = len(items)
+    total_closet_value = Decimal("0.00")
+    category_counts: dict[str, int] = {}
+    brand_counts: dict[str, int] = {}
+    most_expensive_item = None
+
+    for item in items:
+        category_counts[item.category] = category_counts.get(item.category, 0) + 1
+
+        if item.brand is not None:
+            brand_counts[item.brand] = brand_counts.get(item.brand, 0) + 1
+
+        if item.price is not None:
+            total_closet_value += item.price
+
+            if most_expensive_item is None or item.price > most_expensive_item.price:
+                most_expensive_item = item
+
+    return {
+        "total_items": total_items,
+        "total_closet_value": total_closet_value,
+        "category_counts": category_counts,
+        "brand_counts": brand_counts,
+        "most_expensive_item": most_expensive_item,
+    }

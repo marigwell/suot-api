@@ -436,3 +436,145 @@ def test_user_cannot_delete_another_users_item():
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Item not found"}
+
+
+def test_get_items_stats_with_no_items():
+    """
+    Tests closet analytics for a user with no items.
+    """
+    headers = get_auth_headers()
+
+    response = client.get("/items/stats", headers=headers)
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["total_items"] == 0
+    assert data["total_closet_value"] == "0.00"
+    assert data["category_counts"] == {}
+    assert data["brand_counts"] == {}
+    assert data["most_expensive_item"] is None
+
+
+def test_get_item_stats_with_multiple_items():
+    """
+    Tests closet analytics with multiple priced items.
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "120.00",
+            "purchase_date": "2026-08-14",
+            "condition": "new",
+            "notes": "Statement shirt.",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "UNIQLO Boxy Tee",
+            "brand": "UNIQLO",
+            "category": "Shirt",
+            "color": "Green",
+            "size": "XL",
+            "price": "49.99",
+            "purchase_date": "2026-05-28",
+            "condition": "excellent",
+            "notes": "Daily tee.",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "New Balance 9060",
+            "brand": "New Balance",
+            "category": "Shoes",
+            "color": "White",
+            "size": "8.5",
+            "price": "138.00",
+            "purchase_date": "2026-06-01",
+            "condition": "good",
+            "notes": "Main shoes.",
+        },
+        headers=headers,
+    )
+
+    response = client.get("/items/stats", headers=headers)
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["total_items"] == 3
+    assert data["total_closet_value"] == "307.99"
+    assert data["category_counts"] == {
+        "Shirt": 2,
+        "Shoes": 1,
+    }
+    assert data["brand_counts"] == {
+        "Saturn LA": 1,
+        "UNIQLO": 1,
+        "New Balance": 1,
+    }
+    assert data["most_expensive_item"]["name"] == "New Balance 9060"
+    assert data["most_expensive_item"]["brand"] == "New Balance"
+    assert data["most_expensive_item"]["price"] == "138.00"
+
+
+def test_item_stats_only_include_current_users_items():
+    """
+    Tests that closet analytics only include the current user's items.
+    """
+    user_one_headers = get_auth_headers_for_user("jim@example.com", "jim")
+    user_two_headers = get_auth_headers_for_user("sam@example.com", "sam")
+
+    client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "120.00",
+        },
+        headers=user_one_headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Expensive Sam Jacket",
+            "brand": "Sam Brand",
+            "category": "Jacket",
+            "color": "Black",
+            "size": "L",
+            "price": "999.00",
+        },
+        headers=user_two_headers,
+    )
+
+    response = client.get("/items/stats", headers=user_one_headers)
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["total_items"] == 1
+    assert data["total_closet_value"] == "120.00"
+    assert data["category_counts"] == {"Shirt": 1}
+    assert data["brand_counts"] == {"Saturn LA": 1}
+    assert data["most_expensive_item"]["name"] == "Saturn LA Shirt"
+    assert data["most_expensive_item"]["price"] == "120.00"
