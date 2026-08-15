@@ -23,3 +23,18 @@ class Item(ItemCreate):
 
     id: int
     user_id: int
+
+
+class MostExpensiveItem(BaseModel):
+    id: int
+    name: str
+    brand: str | None = None
+    price: Decimal
+
+
+class ItemStats(BaseModel):
+    total_items: int
+    total_closet_value: Decimal
+    category_counts: dict[str, int]
+    brand_counts: dict[str, int]
+    most_expensive_item: MostExpensiveItem | None

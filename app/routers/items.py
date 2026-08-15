@@ -10,13 +10,14 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import UserModel
 from app.routers.auth import get_current_user
-from app.schemas.item import Item, ItemCreate
+from app.schemas.item import Item, ItemCreate, ItemStats
 from app.services.item_service import (
     create_item,
     delete_item,
     get_item_by_id,
     get_items,
     update_item,
+    get_item_stats,
 )
 
 router = APIRouter(prefix="/items", tags=["Items"])
@@ -43,6 +44,17 @@ def add_item(
     Create a new clothing item owned by the current user.
     """
     return create_item(db, item, user_id=current_user.id)
+
+
+@router.get("/stats", response_model=ItemStats)
+def get_stats(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """
+    Return closet analytics for the current user.
+    """
+    return get_item_stats(db, user_id=current_user.id)
 
 
 @router.get("/{item_id}", response_model=Item)
