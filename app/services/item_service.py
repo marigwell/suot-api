@@ -1,17 +1,33 @@
 # /services/item_service.py
 # The service should handle database operations, item creation, item update, and item deletion.
 
+from decimal import Decimal
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.item import ItemModel
 from app.schemas.item import ItemCreate
 
-from decimal import Decimal
 
-
-def get_items(db: Session, user_id: int) -> list[ItemModel]:
+def get_items(
+    db: Session,
+    user_id: int,
+    category: str | None = None,
+    brand: str | None = None,
+    condition: str | None = None,
+) -> list[ItemModel]:
     statement = select(ItemModel).where(ItemModel.user_id == user_id)
+
+    if category is not None:
+        statement = statement.where(ItemModel.category == category)
+
+    if brand is not None:
+        statement = statement.where(ItemModel.brand == brand)
+
+    if condition is not None:
+        statement = statement.where(ItemModel.condition == condition)
+
     return list(db.scalars(statement))
 
 
@@ -24,6 +40,7 @@ def get_item_by_id(
         ItemModel.id == item_id,
         ItemModel.user_id == user_id,
     )
+
     return db.scalar(statement)
 
 
