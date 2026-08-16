@@ -578,3 +578,201 @@ def test_item_stats_only_include_current_users_items():
     assert data["brand_counts"] == {"Saturn LA": 1}
     assert data["most_expensive_item"]["name"] == "Saturn LA Shirt"
     assert data["most_expensive_item"]["price"] == "120.00"
+
+
+def test_filter_items_by_category():
+    """
+    Tests filtering the current user's items by category.
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA ",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "40.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "New Balance 9060",
+            "brand": "New Balance",
+            "category": "Shoes",
+            "color": "White",
+            "size": "8.5",
+            "price": "138.00",
+            "condition": "good",
+        },
+        headers=headers,
+    )
+
+    response = client.get("/items?category=Shirt", headers=headers)
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["name"] == "Saturn LA Shirt"
+    assert data[0]["category"] == "Shirt"
+
+
+def test_filter_items_by_brand():
+    """
+    Tests filtering the current user's items by brand.
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "40.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "UNIQLO Boxy Tee",
+            "brand": "UNIQLO",
+            "category": "Shirt",
+            "color": "Green",
+            "size": "XL",
+            "price": "49.99",
+            "condition": "excellent",
+        },
+        headers=headers,
+    )
+
+    response = client.get("/items?brand=UNIQLO", headers=headers)
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["name"] == "UNIQLO Boxy Tee"
+    assert data[0]["brand"] == "UNIQLO"
+
+
+def test_filter_items_by_condition():
+    """
+    Tests filtering the current user's items by condition
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "40.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Some worn up hoodie",
+            "brand": "Unknown",
+            "category": "Hoodie",
+            "color": "Black",
+            "size": "L",
+            "price": "30.00",
+            "condition": "bad",
+        },
+        headers=headers,
+    )
+
+    response = client.get("/items?condition=bad", headers=headers)
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["name"] == "Some worn up hoodie"
+    assert data[0]["condition"] == "bad"
+
+
+def test_filter_items_by_category_and_brand():
+    """
+    Tests filtering the current user's items by category and brand together.
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "120.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "UNIQLO Boxy Tee",
+            "brand": "UNIQLO",
+            "category": "Shirt",
+            "color": "Green",
+            "size": "XL",
+            "price": "49.99",
+            "condition": "excellent",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "UNIQLO Wide Pants",
+            "brand": "UNIQLO",
+            "category": "Pants",
+            "color": "Black",
+            "size": "M",
+            "price": "59.99",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    response = client.get(
+        "/items?category=Shirt&brand=UNIQLO",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["name"] == "UNIQLO Boxy Tee"
+    assert data[0]["category"] == "Shirt"
+    assert data[0]["brand"] == "UNIQLO"

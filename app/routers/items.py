@@ -27,11 +27,23 @@ CurrentUser = Annotated[UserModel, Depends(get_current_user)]
 
 
 @router.get("", response_model=list[Item])
-def list_items(db: DbSession, current_user: CurrentUser):
+def list_items(
+    db: DbSession,
+    current_user: CurrentUser,
+    category: str | None = None,
+    brand: str | None = None,
+    condition: str | None = None,
+):
     """
-    Return items owned by the current user.
+    Return items owned by the current user with options to be filtered by category, brand, or condition
     """
-    return get_items(db, user_id=current_user.id)
+    return get_items(
+        db,
+        user_id=current_user.id,
+        category=category,
+        brand=brand,
+        condition=condition,
+    )
 
 
 @router.post("", response_model=Item)
