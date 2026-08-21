@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from decimal import Decimal
 
 from app.database import get_db
 from app.models.user import UserModel
@@ -33,9 +34,11 @@ def list_items(
     category: str | None = None,
     brand: str | None = None,
     condition: str | None = None,
+    min_price: Decimal | None = None,
+    max_price: Decimal | None = None,
 ):
     """
-    Return items owned by the current user with options to be filtered by category, brand, or condition
+    Return items owned by the current user with options to be filtered by category, brand, condition, or price range.
     """
     return get_items(
         db,
@@ -43,6 +46,8 @@ def list_items(
         category=category,
         brand=brand,
         condition=condition,
+        min_price=min_price,
+        max_price=max_price,
     )
 
 

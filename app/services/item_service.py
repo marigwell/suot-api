@@ -16,6 +16,8 @@ def get_items(
     category: str | None = None,
     brand: str | None = None,
     condition: str | None = None,
+    min_price: Decimal | None = None,
+    max_price: Decimal | None = None,
 ) -> list[ItemModel]:
     statement = select(ItemModel).where(ItemModel.user_id == user_id)
 
@@ -27,6 +29,12 @@ def get_items(
 
     if condition is not None:
         statement = statement.where(ItemModel.condition == condition)
+
+    if min_price is not None:
+        statement = statement.where(ItemModel.price >= min_price)
+
+    if max_price is not None:
+        statement = statement.where(ItemModel.price <= max_price)
 
     return list(db.scalars(statement))
 
