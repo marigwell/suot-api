@@ -776,3 +776,222 @@ def test_filter_items_by_category_and_brand():
     assert data[0]["name"] == "UNIQLO Boxy Tee"
     assert data[0]["category"] == "Shirt"
     assert data[0]["brand"] == "UNIQLO"
+
+
+def test_filter_items_by_min_price():
+    """
+    Tests filtering the current user's items by minimum price.
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Cheap Tee",
+            "brand": "UNIQLO",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "25.00",
+            "condition": "good",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "Black",
+            "size": "M",
+            "price": "120.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    response = client.get("/items?min_price=50", headers=headers)
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["name"] == "Saturn LA Shirt"
+    assert data[0]["price"] == "120.00"
+
+
+def test_filter_items_by_max_price():
+    """
+    Tests filtering the current user's items by maximum price.
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Cheap Tee",
+            "brand": "UNIQLO",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "25.00",
+            "condition": "good",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "Black",
+            "size": "M",
+            "price": "120.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    response = client.get("/items?max_price=50", headers=headers)
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["name"] == "Cheap Tee"
+    assert data[0]["price"] == "25.00"
+
+
+def test_filter_items_by_price_range():
+    """
+    Tests filtering the current user's items by minimum and maximum price together.
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Cheap Tee",
+            "brand": "UNIQLO",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "25.00",
+            "condition": "good",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "UNIQLO Jacket",
+            "brand": "UNIQLO",
+            "category": "Outerwear",
+            "color": "Black",
+            "size": "M",
+            "price": "80.00",
+            "condition": "excellent",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "Black",
+            "size": "M",
+            "price": "120.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Designer Coat",
+            "brand": "COS",
+            "category": "Outerwear",
+            "color": "Black",
+            "size": "M",
+            "price": "250.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    response = client.get(
+        "/items?min_price=50&max_price=150",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 2
+
+    item_names = {item["name"] for item in data}
+
+    assert item_names == {
+        "UNIQLO Jacket",
+        "Saturn LA Shirt",
+    }
+
+
+def test_price_range_filter_only_includes_current_users_items():
+    """
+    Tests that price range filtering still respects item ownership.
+    """
+    jim_headers = get_auth_headers_for_user("jim@example.com", "jim")
+    sam_headers = get_auth_headers_for_user("sam@example.com", "sam")
+
+    client.post(
+        "/items",
+        json={
+            "name": "Jim Jacket",
+            "brand": "UNIQLO",
+            "category": "Outerwear",
+            "color": "Black",
+            "size": "M",
+            "price": "100.00",
+            "condition": "good",
+        },
+        headers=jim_headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Sam Jacket",
+            "brand": "COS",
+            "category": "Outerwear",
+            "color": "Black",
+            "size": "M",
+            "price": "100.00",
+            "condition": "good",
+        },
+        headers=sam_headers,
+    )
+
+    response = client.get(
+        "/items?min_price=50&max_price=150",
+        headers=jim_headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["name"] == "Jim Jacket"
