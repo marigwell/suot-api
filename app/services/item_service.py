@@ -18,6 +18,8 @@ def get_items(
     condition: str | None = None,
     min_price: Decimal | None = None,
     max_price: Decimal | None = None,
+    sort_by: str | None = None,
+    sort_order: str = "asc",
 ) -> list[ItemModel]:
     statement = select(ItemModel).where(ItemModel.user_id == user_id)
 
@@ -35,6 +37,20 @@ def get_items(
 
     if max_price is not None:
         statement = statement.where(ItemModel.price <= max_price)
+
+    sort_columns = {
+        "name": ItemModel.name,
+        "price": ItemModel.price,
+        "purchase_date": ItemModel.purchase_date,
+    }
+
+    if sort_by is not None:
+        sort_column = sort_columns[sort_by]
+
+        if sort_order == "desc":
+            statement = statement.order_by(sort_column.desc())
+        else:
+            statement = statement.order_by(sort_column.asc())
 
     return list(db.scalars(statement))
 

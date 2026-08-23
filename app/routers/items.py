@@ -2,7 +2,7 @@
 # Router should handle HTTP route, request body, path parameters,
 # 404 exceptions, response model
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -36,6 +36,8 @@ def list_items(
     condition: str | None = None,
     min_price: Decimal | None = None,
     max_price: Decimal | None = None,
+    sort_by: Literal["name", "price", "purchase_date"] | None = None,
+    sort_order: Literal["asc", "desc"] = "asc",
 ):
     """
     Return items owned by the current user with options to be filtered by category, brand, condition, or price range.
@@ -48,6 +50,8 @@ def list_items(
         condition=condition,
         min_price=min_price,
         max_price=max_price,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
 
 
