@@ -995,3 +995,298 @@ def test_price_range_filter_only_includes_current_users_items():
 
     assert len(data) == 1
     assert data[0]["name"] == "Jim Jacket"
+
+
+def test_sort_items_by_price_ascending():
+    """
+    Tests sorting the current user's items by price from low to high.
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Designer Coat",
+            "brand": "COS",
+            "category": "Outerwear",
+            "color": "Black",
+            "size": "M",
+            "price": "250.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Cheap Tee",
+            "brand": "UNIQLO",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "25.00",
+            "condition": "good",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "Black",
+            "size": "M",
+            "price": "120.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    response = client.get(
+        "/items?sort_by=price&sort_order=asc",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    item_names = [item["name"] for item in data]
+
+    assert item_names == [
+        "Cheap Tee",
+        "Saturn LA Shirt",
+        "Designer Coat",
+    ]
+
+
+def test_sort_items_by_price_descending():
+    """
+    Tests sorting the current user's items by price from high to low.
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Designer Coat",
+            "brand": "COS",
+            "category": "Outerwear",
+            "color": "Black",
+            "size": "M",
+            "price": "250.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Cheap Tee",
+            "brand": "UNIQLO",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "25.00",
+            "condition": "good",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "Black",
+            "size": "M",
+            "price": "120.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    response = client.get(
+        "/items?sort_by=price&sort_order=desc",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    item_names = [item["name"] for item in data]
+
+    assert item_names == [
+        "Designer Coat",
+        "Saturn LA Shirt",
+        "Cheap Tee",
+    ]
+
+
+def test_sort_items_by_name_ascending():
+    """
+    Tests sorting the current user's items by name alphabetically.
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Saturn LA Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "Black",
+            "size": "M",
+            "price": "120.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Cheap Tee",
+            "brand": "UNIQLO",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "25.00",
+            "condition": "good",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Designer Coat",
+            "brand": "COS",
+            "category": "Outerwear",
+            "color": "Black",
+            "size": "M",
+            "price": "250.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    response = client.get(
+        "/items?sort_by=name&sort_order=asc",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    item_names = [item["name"] for item in data]
+
+    assert item_names == [
+        "Cheap Tee",
+        "Designer Coat",
+        "Saturn LA Shirt",
+    ]
+
+
+def test_sort_items_by_purchase_date_descending():
+    """
+    Tests sorting the current user's items by purchase date from newest to oldest.
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Old Tee",
+            "brand": "UNIQLO",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "25.00",
+            "purchase_date": "2024-01-10",
+            "condition": "good",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "New Jacket",
+            "brand": "COS",
+            "category": "Outerwear",
+            "color": "Black",
+            "size": "M",
+            "price": "180.00",
+            "purchase_date": "2025-08-15",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Middle Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "Black",
+            "size": "M",
+            "price": "120.00",
+            "purchase_date": "2025-03-20",
+            "condition": "excellent",
+        },
+        headers=headers,
+    )
+
+    response = client.get(
+        "/items?sort_by=purchase_date&sort_order=desc",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    item_names = [item["name"] for item in data]
+
+    assert item_names == [
+        "New Jacket",
+        "Middle Shirt",
+        "Old Tee",
+    ]
+
+
+def test_rejects_invalid_sort_by():
+    """
+    Tests that invalid sort_by values are rejected.
+    """
+    headers = get_auth_headers()
+
+    response = client.get(
+        "/items?sort_by=random",
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_rejects_invalid_sort_order():
+    """
+    Tests that invalid sort_order values are rejected.
+    """
+    headers = get_auth_headers()
+
+    response = client.get(
+        "/items?sort_by=price&sort_order=sideways",
+        headers=headers,
+    )
+
+    assert response.status_code == 422
