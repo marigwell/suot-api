@@ -128,7 +128,7 @@ def test_get_items():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     assert len(data) == 1
     assert data[0]["name"] == "Saturn Los Angeles Pleated Trousers"
@@ -344,7 +344,7 @@ def test_users_only_see_their_own_items():
     response = client.get("/items", headers=user_two_headers)
 
     assert response.status_code == 200
-    assert response.json() == []
+    assert response.json()["items"] == []
 
 
 def test_user_cannot_get_another_users_item():
@@ -618,7 +618,7 @@ def test_filter_items_by_category():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     assert len(data) == 1
     assert data[0]["name"] == "Saturn LA Shirt"
@@ -663,7 +663,7 @@ def test_filter_items_by_brand():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     assert len(data) == 1
     assert data[0]["name"] == "UNIQLO Boxy Tee"
@@ -708,7 +708,7 @@ def test_filter_items_by_condition():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     assert len(data) == 1
     assert data[0]["name"] == "Some worn up hoodie"
@@ -770,7 +770,7 @@ def test_filter_items_by_category_and_brand():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     assert len(data) == 1
     assert data[0]["name"] == "UNIQLO Boxy Tee"
@@ -816,7 +816,7 @@ def test_filter_items_by_min_price():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     assert len(data) == 1
     assert data[0]["name"] == "Saturn LA Shirt"
@@ -861,7 +861,7 @@ def test_filter_items_by_max_price():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     assert len(data) == 1
     assert data[0]["name"] == "Cheap Tee"
@@ -937,7 +937,7 @@ def test_filter_items_by_price_range():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     assert len(data) == 2
 
@@ -991,7 +991,7 @@ def test_price_range_filter_only_includes_current_users_items():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     assert len(data) == 1
     assert data[0]["name"] == "Jim Jacket"
@@ -1052,7 +1052,7 @@ def test_sort_items_by_price_ascending():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     item_names = [item["name"] for item in data]
 
@@ -1118,7 +1118,7 @@ def test_sort_items_by_price_descending():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     item_names = [item["name"] for item in data]
 
@@ -1184,7 +1184,7 @@ def test_sort_items_by_name_ascending():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     item_names = [item["name"] for item in data]
 
@@ -1253,7 +1253,7 @@ def test_sort_items_by_purchase_date_descending():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     item_names = [item["name"] for item in data]
 
@@ -1347,7 +1347,7 @@ def test_paginates_items_with_limit():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     item_names = [item["name"] for item in data]
 
@@ -1412,7 +1412,7 @@ def test_paginates_items_with_offset():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     item_names = [item["name"] for item in data]
 
@@ -1517,7 +1517,140 @@ def test_pagination_only_includes_current_users_items():
 
     assert response.status_code == 200
 
-    data = response.json()
+    data = response.json()["items"]
 
     assert len(data) == 1
     assert data[0]["name"] == "Gamma Shirt"
+
+
+def test_get_items_returns_pagination_metadata():
+    """
+    Tests that GET /items returns items with pagination metadata.
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Alpha Tee",
+            "brand": "UNIQLO",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "25.00",
+            "condition": "good",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Beta Jacket",
+            "brand": "COS",
+            "category": "Outerwear",
+            "color": "Black",
+            "size": "M",
+            "price": "180.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    response = client.get(
+        "/items?sort_by=name&sort_order=asc&limit=1&offset=0",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data["items"]) == 1
+    assert data["items"][0]["name"] == "Alpha Tee"
+    assert data["total"] == 2
+    assert data["limit"] == 1
+    assert data["offset"] == 0
+    assert data["has_more"] is True
+
+
+def test_get_items_pagination_metadata_has_more_false_on_last_page():
+    """
+    Tests that has_more is false when the current page reaches the end.
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Alpha Tee",
+            "brand": "UNIQLO",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "25.00",
+            "condition": "good",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Beta Jacket",
+            "brand": "COS",
+            "category": "Outerwear",
+            "color": "Black",
+            "size": "M",
+            "price": "180.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    response = client.get(
+        "/items?sort_by=name&sort_order=asc&limit=1&offset=1",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data["items"]) == 1
+    assert data["items"][0]["name"] == "Beta Jacket"
+    assert data["total"] == 2
+    assert data["limit"] == 1
+    assert data["offset"] == 1
+    assert data["has_more"] is False
+
+
+def test_item_stats_include_more_than_default_page_size():
+    """
+    Tests that closet stats are not limited by item pagination.
+    """
+    headers = get_auth_headers()
+
+    for index in range(25):
+        client.post(
+            "/items",
+            json={
+                "name": f"Item {index}",
+                "brand": "Test Brand",
+                "category": "Shirt",
+                "color": "Black",
+                "size": "M",
+                "price": "1.00",
+                "condition": "good",
+            },
+            headers=headers,
+        )
+
+    response = client.get("/items/stats", headers=headers)
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["total_items"] == 25
+    assert data["total_closet_value"] == "25.00"

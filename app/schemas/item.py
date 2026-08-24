@@ -25,6 +25,14 @@ class Item(ItemCreate):
     user_id: int
 
 
+class ItemPage(BaseModel):
+    items: list[Item]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
 class MostExpensiveItem(BaseModel):
     id: int
     name: str
