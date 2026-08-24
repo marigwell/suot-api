@@ -11,8 +11,9 @@ from decimal import Decimal
 from app.database import get_db
 from app.models.user import UserModel
 from app.routers.auth import get_current_user
-from app.schemas.item import Item, ItemCreate, ItemStats
+from app.schemas.item import Item, ItemCreate, ItemStats, ItemPage
 from app.services.item_service import (
+    count_items,
     create_item,
     delete_item,
     get_item_by_id,
@@ -27,7 +28,7 @@ DbSession = Annotated[Session, Depends(get_db)]
 CurrentUser = Annotated[UserModel, Depends(get_current_user)]
 
 
-@router.get("", response_model=list[Item])
+@router.get("", response_model=ItemPage)
 def list_items(
     db: DbSession,
     current_user: CurrentUser,
@@ -42,10 +43,10 @@ def list_items(
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
     """
-    Return items owned by the current user, optionally filtered, sorted,
-    and paginated.
+    Return a page of items owned by the current user, optionally filtered,
+    sorted, and paginated.
     """
-    return get_items(
+    items = get_items(
         db,
         user_id=current_user.id,
         category=category,
@@ -58,6 +59,24 @@ def list_items(
         limit=limit,
         offset=offset,
     )
+
+    total = count_items(
+        db,
+        user_id=current_user.id,
+        category=category,
+        brand=brand,
+        condition=condition,
+        min_price=min_price,
+        max_price=max_price,
+    )
+
+    return {
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(items) < total,
+    }
 
 
 @router.post("", response_model=Item)

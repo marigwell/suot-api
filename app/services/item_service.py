@@ -3,11 +3,39 @@
 
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.item import ItemModel
 from app.schemas.item import ItemCreate
+
+
+def _build_item_filters(
+    user_id: int,
+    category: str | None = None,
+    brand: str | None = None,
+    condition: str | None = None,
+    min_price: Decimal | None = None,
+    max_price: Decimal | None = None,
+) -> list:
+    filters = [ItemModel.user_id == user_id]
+
+    if category is not None:
+        filters.append(ItemModel.category == category)
+
+    if brand is not None:
+        filters.append(ItemModel.brand == brand)
+
+    if condition is not None:
+        filters.append(ItemModel.condition == condition)
+
+    if min_price is not None:
+        filters.append(ItemModel.price >= min_price)
+
+    if max_price is not None:
+        filters.append(ItemModel.price <= max_price)
+
+    return filters
 
 
 # 1. user ownership
@@ -27,22 +55,16 @@ def get_items(
     limit: int = 20,
     offset: int = 0,
 ) -> list[ItemModel]:
-    statement = select(ItemModel).where(ItemModel.user_id == user_id)
+    filters = _build_item_filters(
+        user_id=user_id,
+        category=category,
+        brand=brand,
+        condition=condition,
+        min_price=min_price,
+        max_price=max_price,
+    )
 
-    if category is not None:
-        statement = statement.where(ItemModel.category == category)
-
-    if brand is not None:
-        statement = statement.where(ItemModel.brand == brand)
-
-    if condition is not None:
-        statement = statement.where(ItemModel.condition == condition)
-
-    if min_price is not None:
-        statement = statement.where(ItemModel.price >= min_price)
-
-    if max_price is not None:
-        statement = statement.where(ItemModel.price <= max_price)
+    statement = select(ItemModel).where(*filters)
 
     sort_columns = {
         "name": ItemModel.name,
@@ -61,6 +83,29 @@ def get_items(
     statement = statement.limit(limit).offset(offset)
 
     return list(db.scalars(statement))
+
+
+def count_items(
+    db: Session,
+    user_id: int,
+    category: str | None = None,
+    brand: str | None = None,
+    condition: str | None = None,
+    min_price: Decimal | None = None,
+    max_price: Decimal | None = None,
+) -> int:
+    filters = _build_item_filters(
+        user_id=user_id,
+        category=category,
+        brand=brand,
+        condition=condition,
+        min_price=min_price,
+        max_price=max_price,
+    )
+
+    statement = select(func.count()).select_from(ItemModel).where(*filters)
+
+    return db.scalar(statement) or 0
 
 
 def get_item_by_id(
@@ -141,7 +186,8 @@ def delete_item(db: Session, item_id: int, user_id: int) -> bool:
 
 
 def get_item_stats(db: Session, user_id: int) -> dict:
-    items = get_items(db, user_id)
+    statement = select(ItemModel).where(ItemModel.user_id == user_id)
+    items = list(db.scalars(statement))
 
     total_items = len(items)
     total_closet_value = Decimal("0.00")
