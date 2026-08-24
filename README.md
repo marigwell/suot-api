@@ -2,12 +2,12 @@
 
 Suot API is a backend engineering project for building a user-owned fashion inventory and recommendation system.
 
-The project is designed as a practical backend learning system. It currently covers REST API design, layered architecture, PostgreSQL persistence, Docker, Alembic migrations, automated testing, authentication, row-level authorization, closet analytics, and item filtering.
+The project is designed as a practical backend learning system. It currently covers REST API design, layered architecture, PostgreSQL persistence, Docker, Alembic migrations, automated testing, authentication, row-level authorization, closet analytics, item filtering, sorting, pagination, and pagination metadata.
 
 Detailed documentation is split into:
 
 - `DEVLOG.md` — day-by-day development history and completed milestones.
-- `NOTES.md` — reusable backend concepts and the current understanding summary.
+- `NOTES.md` — reusable backend concepts and current understanding notes.
 
 ---
 
@@ -76,7 +76,7 @@ Detailed documentation is split into:
 - Condition.
 - Notes.
 
-### Analytics and Filtering
+### Analytics, Filtering, Sorting, and Pagination
 
 - Protected closet analytics endpoint.
 - Total item count.
@@ -85,8 +85,12 @@ Detailed documentation is split into:
 - Most expensive item.
 - Empty-closet analytics behavior.
 - Basic item filtering by category, brand, and condition.
-- Combined filters.
-- Analytics and filters remain scoped to the current user.
+- Price range filtering with `min_price` and `max_price`.
+- Sorting by name, price, and purchase date.
+- Sort order support with ascending and descending options.
+- Offset-based pagination with `limit` and `offset`.
+- Pagination metadata with `total`, `limit`, `offset`, and `has_more`.
+- Analytics remain scoped to the current user and are not limited by pagination.
 
 ### Testing
 
@@ -98,6 +102,11 @@ Detailed documentation is split into:
 - Richer item field tests.
 - Closet analytics tests.
 - Basic and combined filtering tests.
+- Price range filtering tests.
+- Sorting tests.
+- Pagination tests.
+- Pagination metadata tests.
+- Regression test ensuring closet analytics are not limited by item pagination.
 
 ---
 
@@ -134,13 +143,88 @@ All item endpoints require:
 Authorization: Bearer <access_token>
 ```
 
-### Item Filters
+---
+
+## Item Query Options
+
+### Filters
 
 ```http
 GET /items?category=Shirt
 GET /items?brand=UNIQLO
 GET /items?condition=new
 GET /items?category=Shirt&brand=UNIQLO
+```
+
+### Price Range Filters
+
+```http
+GET /items?min_price=50
+GET /items?max_price=150
+GET /items?min_price=50&max_price=150
+```
+
+### Sorting
+
+```http
+GET /items?sort_by=name&sort_order=asc
+GET /items?sort_by=price&sort_order=desc
+GET /items?sort_by=purchase_date&sort_order=desc
+```
+
+Supported `sort_by` values:
+
+```txt
+name
+price
+purchase_date
+```
+
+Supported `sort_order` values:
+
+```txt
+asc
+desc
+```
+
+Invalid sorting values return `422 Unprocessable Entity`.
+
+### Pagination
+
+```http
+GET /items?limit=20&offset=0
+GET /items?limit=20&offset=20
+```
+
+Pagination rules:
+
+```txt
+limit  → how many items to return
+offset → how many items to skip
+```
+
+`limit` must be between `1` and `100`.
+
+`offset` must be `0` or greater.
+
+Invalid pagination values return `422 Unprocessable Entity`.
+
+### Combined Query Example
+
+```http
+GET /items?category=Shirt&brand=UNIQLO&min_price=25&max_price=100&sort_by=price&sort_order=asc&limit=20&offset=0
+```
+
+The service applies query behavior in this order:
+
+```txt
+ownership
+  ↓
+filters
+  ↓
+sorting
+  ↓
+pagination
 ```
 
 ---
@@ -248,7 +332,9 @@ Content-Type: application/json
 }
 ```
 
-The client does not send `user_id`. The backend assigns ownership from the verified access token:
+The client does not send `user_id`.
+
+The backend assigns ownership from the verified access token:
 
 ```txt
 JWT access token
@@ -278,23 +364,72 @@ Example response:
 }
 ```
 
-### List and Filter Items
+### List Items
 
 ```http
 GET /items
+Authorization: Bearer <access_token>
+```
+
+Example response:
+
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "name": "New Balance 9060",
+      "brand": "New Balance",
+      "category": "Shoes",
+      "color": "Grey",
+      "size": "10",
+      "price": "138.00",
+      "purchase_date": "2026-08-10",
+      "condition": "new",
+      "notes": "Everyday sneakers"
+    }
+  ],
+  "total": 1,
+  "limit": 20,
+  "offset": 0,
+  "has_more": false
+}
+```
+
+The `GET /items` endpoint returns a paginated response object, not a raw list.
+
+```txt
+items    → the current page of item records
+total    → total number of matching items before pagination
+limit    → requested page size
+offset   → number of skipped items
+has_more → whether another page exists
+```
+
+### List and Filter Items
+
+```http
 GET /items?category=Shoes
 GET /items?brand=New%20Balance
 GET /items?condition=new
 GET /items?category=Shoes&condition=new
+GET /items?min_price=50&max_price=150
+GET /items?sort_by=price&sort_order=asc
+GET /items?limit=10&offset=20
 ```
 
-The service always begins with the ownership condition and then adds optional filters:
+The service always begins with the ownership condition and then adds optional query behavior:
 
 ```txt
 user_id == current_user.id
 AND optional category
 AND optional brand
 AND optional condition
+AND optional minimum price
+AND optional maximum price
+THEN optional sorting
+THEN pagination
 ```
 
 ### Closet Analytics
@@ -330,6 +465,8 @@ Example response:
 
 An empty closet returns zero values, empty count objects, and `null` for the most expensive item.
 
+Closet analytics are not paginated. The analytics query uses the full current-user item set instead of reusing the paginated item list.
+
 ---
 
 ## Architecture
@@ -364,6 +501,7 @@ Schema
 Service
   → database queries and application logic
   → ownership filtering
+  → filtering, sorting, pagination, and counting
   → analytics calculations
 
 Model
@@ -611,6 +749,13 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
+Automatically fix lint and formatting issues:
+
+```bash
+uv run ruff check . --fix
+uv run ruff format .
+```
+
 ---
 
 ## Running with Docker Compose
@@ -663,9 +808,9 @@ docker compose down -v
 In the OAuth2 login form:
 
 ```txt
-username     → the user's email
-password     → the user's password
-client_id    → leave blank
+username      → the user's email
+password      → the user's password
+client_id     → leave blank
 client_secret → leave blank
 ```
 
@@ -694,6 +839,14 @@ empty and populated closet analytics
 analytics user isolation
 category, brand, and condition filtering
 combined item filters
+minimum and maximum price filtering
+price range filtering
+sorting by price, name, and purchase date
+invalid sorting validation
+pagination with limit and offset
+invalid pagination validation
+pagination metadata
+analytics beyond the default page size
 ```
 
 Tests use a separate database and reset state between test cases.
@@ -760,18 +913,30 @@ Do not commit .env, local databases, or Python cache files.
 - Phase 9: Richer item fields — DONE
 - Phase 10A: Closet analytics endpoint — DONE
 - Phase 11A: Basic item filtering — DONE
-- Phase 11B: Price range filters — NEXT
-- Phase 11C: Sorting and pagination
-- Phase 12: Validation and error-handling polish
+- Phase 11B: Price range filters — DONE
+- Phase 11C: Item sorting — DONE
+- Phase 11D: Item pagination — DONE
+- Phase 11E: Pagination metadata — DONE
 
-### Chapter 4 — CI, Deployment, and Release Workflow
+### Chapter 4 — Frontend MVP
+
+- Next.js application setup — NEXT
+- TypeScript and Tailwind setup
+- Login and registration pages
+- Authenticated item list page
+- Add item form
+- Filter, sort, and pagination controls
+- Basic dashboard cards from `/items/stats`
+
+### Chapter 5 — CI, Deployment, and Release Workflow
 
 - GitHub Actions CI checks
 - Production-ready configuration
-- Initial deployment
+- Initial backend deployment
+- Initial frontend deployment
 - Deployment documentation and release checklist
 
-### Chapter 5 — Intelligence and Personalization
+### Chapter 6 — Intelligence and Personalization
 
 - Rule-based wardrobe recommendations
 - Outfit generation logic
@@ -810,14 +975,29 @@ cross-user authorization isolation
 richer item records
 closet analytics
 basic and combined item filters
+price range filters
+sorting
+pagination
+pagination metadata
+analytics protected from pagination bugs
 ```
 
-Next planned backend work:
+Next planned work:
 
-```http
-GET /items?min_price=50
-GET /items?max_price=150
-GET /items?min_price=50&max_price=150
+```txt
+Phase 12: Frontend MVP setup
 ```
 
-This will extend the same owner-scoped query design with numeric price comparisons.
+The next milestone is to make Suot visual:
+
+```txt
+Log in
+  ↓
+view your own closet items
+  ↓
+add new items
+  ↓
+filter, sort, and paginate inventory
+  ↓
+view basic closet analytics
+```

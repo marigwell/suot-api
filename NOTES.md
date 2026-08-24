@@ -1,6 +1,6 @@
 # Suot API Core Notes
 
-This file contains the reusable backend concepts, architecture notes, and current understanding developed while building Suot API through Day 14.
+This file contains reusable backend concepts, architecture notes, and current understanding developed while building Suot API through Phase 11E.
 
 ---
 
@@ -53,6 +53,8 @@ HTTP exceptions
 
 Routers should pass plain values, such as `current_user.id`, into the service layer.
 
+Routers should not contain heavy database logic. They translate HTTP requests into service calls.
+
 ### Pydantic Schemas
 
 Schemas define API input and output shapes.
@@ -64,6 +66,28 @@ response schema → what the API may return
 
 Request schemas containing secrets should not be reused as response schemas.
 
+For example:
+
+```txt
+UserCreate
+  → contains password
+  → used for registration input
+
+User
+  → excludes password and hashed_password
+  → used for safe API output
+```
+
+Item response schemas now include both individual item responses and paginated item page responses.
+
+```txt
+Item
+  → one item record
+
+ItemPage
+  → list of items plus pagination metadata
+```
+
 ### Services
 
 Services handle database and application logic:
@@ -72,12 +96,24 @@ Services handle database and application logic:
 build SQLAlchemy queries
 create model objects
 apply ownership rules
+apply filters
+apply sorting
+apply pagination
+count matching rows
 update and delete rows
 calculate analytics
 return results to routers
 ```
 
-Services should not call FastAPI's `Depends()` or import `get_current_user()`. They receive ordinary arguments such as `user_id: int`.
+Services should not call FastAPI's `Depends()` or import `get_current_user()`.
+
+They receive ordinary arguments such as:
+
+```python
+user_id: int
+```
+
+This keeps the service layer reusable and easier to test.
 
 ### SQLAlchemy Models
 
@@ -87,6 +123,8 @@ Models define how Python objects map to database tables.
 ItemModel → items table
 UserModel → users table
 ```
+
+Models describe database shape. They do not decide HTTP behavior.
 
 ### Database Session
 
@@ -144,7 +182,9 @@ get_db() closes session
 db.get(ItemModel, item_id)
 ```
 
-Finds one row by primary key. Owner-scoped item access requires an additional `user_id` condition, so Suot normally uses a `select()` statement for protected lookups.
+Finds one row by primary key.
+
+Owner-scoped item access requires an additional `user_id` condition, so Suot normally uses a `select()` statement for protected item lookups.
 
 ### `select()`
 
@@ -152,7 +192,9 @@ Finds one row by primary key. Owner-scoped item access requires an additional `u
 select(ItemModel)
 ```
 
-Builds a query. Conditions can be added with `.where()`:
+Builds a query.
+
+Conditions can be added with `.where()`:
 
 ```python
 select(ItemModel).where(
@@ -161,13 +203,31 @@ select(ItemModel).where(
 )
 ```
 
+Multiple conditions stack together as `AND`.
+
 ### `db.scalars()`
 
 ```python
-list(db.scalars(statement).all())
+list(db.scalars(statement))
 ```
 
-This runs a `SELECT` statement, extracts model objects, and converts the result into a list.
+Runs a `SELECT` statement, extracts model objects, and converts the result into a list.
+
+### `db.scalar()`
+
+```python
+db.scalar(statement)
+```
+
+Runs a statement and returns one scalar result.
+
+Suot uses this for things like:
+
+```python
+count_items()
+```
+
+where the query returns a number instead of model objects.
 
 ### `db.add()`
 
@@ -175,7 +235,9 @@ This runs a `SELECT` statement, extracts model objects, and converts the result 
 db.add(item)
 ```
 
-Stages a new object for insertion. It does not permanently save the row until `db.commit()`.
+Stages a new object for insertion.
+
+It does not permanently save the row until `db.commit()`.
 
 ### Field Assignment
 
@@ -184,7 +246,9 @@ item.name = item_data.name
 item.category = item_data.category
 ```
 
-SQLAlchemy tracks changes made to loaded model objects. A later commit persists them.
+SQLAlchemy tracks changes made to loaded model objects.
+
+A later commit persists them.
 
 ### `db.delete()`
 
@@ -208,7 +272,9 @@ Permanently saves pending inserts, updates, and deletes in the current transacti
 db.refresh(item)
 ```
 
-Reloads a model from the database. This is useful after creation because the database generates values such as `id`.
+Reloads a model from the database.
+
+This is useful after creation because the database generates values such as `id`.
 
 ---
 
@@ -229,16 +295,16 @@ database and security setup
 Important files:
 
 ```txt
-.env         → real local values; never commit
-.env.example → safe template; commit this
+.env          → real local values; never commit
+.env.example  → safe template; commit this
 app/config.py → validated application settings
 ```
 
 Database hosts differ by runtime:
 
 ```txt
-API on laptop         → localhost
-API in Docker Compose → db
+API on laptop          → localhost
+API in Docker Compose  → db
 ```
 
 ---
@@ -280,7 +346,9 @@ docker compose down -v
 
 ## Alembic and Schema Evolution
 
-SQLAlchemy models describe the desired table structure. Alembic migrations change the real database from one version to another.
+SQLAlchemy models describe the desired table structure.
+
+Alembic migrations change the real database from one version to another.
 
 ```txt
 Change model
@@ -301,7 +369,9 @@ uv run alembic upgrade head
 
 The `alembic_version` table records which migration revision the database has applied.
 
-When adding a column to a table with existing rows, nullability and default values must be considered. Optional fields such as `brand`, `price`, `purchase_date`, `condition`, and `notes` allowed existing rows to survive schema changes safely.
+When adding a column to a table with existing rows, nullability and default values must be considered.
+
+Optional fields such as `brand`, `price`, `purchase_date`, `condition`, and `notes` allowed existing rows to survive schema changes safely.
 
 ---
 
@@ -496,7 +566,9 @@ Suot's core row-level authorization rule is:
 item.user_id == current_user.id
 ```
 
-The client never supplies item ownership. The backend derives it from the authenticated user:
+The client never supplies item ownership.
+
+The backend derives ownership from the authenticated user:
 
 ```txt
 JWT
@@ -549,7 +621,7 @@ Assert User A's item is never exposed or modified
 
 ### Owner-Scoped Base Query
 
-Every list query begins with ownership:
+Every private item query begins with ownership:
 
 ```python
 statement = select(ItemModel).where(ItemModel.user_id == user_id)
@@ -566,6 +638,33 @@ if brand is not None:
 
 if condition is not None:
     statement = statement.where(ItemModel.condition == condition)
+```
+
+### Price Range Filters
+
+Price filters compare against the `price` column.
+
+```python
+if min_price is not None:
+    statement = statement.where(ItemModel.price >= min_price)
+
+if max_price is not None:
+    statement = statement.where(ItemModel.price <= max_price)
+```
+
+Query examples:
+
+```http
+GET /items?min_price=50
+GET /items?max_price=150
+GET /items?min_price=50&max_price=150
+```
+
+Meaning:
+
+```txt
+min_price → ItemModel.price >= min_price
+max_price → ItemModel.price <= max_price
 ```
 
 ### Router-to-Service Flow
@@ -588,8 +687,10 @@ If the router receives a parameter but does not pass it to the service, the filt
 
 ```txt
 get_items()
-  → returns a collection
+  → returns a collection page
   → applies optional filters
+  → applies optional sorting
+  → applies pagination
 
 get_item_by_id()
   → returns one item
@@ -619,6 +720,245 @@ AND brand == "UNIQLO"
 
 ---
 
+## Sorting
+
+Sorting controls the order of matching rows.
+
+```http
+GET /items?sort_by=name&sort_order=asc
+GET /items?sort_by=price&sort_order=desc
+GET /items?sort_by=purchase_date&sort_order=desc
+```
+
+Supported `sort_by` values:
+
+```txt
+name
+price
+purchase_date
+```
+
+Supported `sort_order` values:
+
+```txt
+asc
+desc
+```
+
+The router uses `Literal` types to reject invalid sorting options before the request reaches the service.
+
+Invalid values return:
+
+```http
+422 Unprocessable Entity
+```
+
+Sorting happens after ownership and filters:
+
+```txt
+ownership
+  ↓
+filters
+  ↓
+sorting
+```
+
+---
+
+## Pagination
+
+Pagination returns a smaller slice of a larger result set.
+
+```http
+GET /items?limit=20&offset=0
+GET /items?limit=20&offset=20
+```
+
+```txt
+limit  → how many rows to return
+offset → how many rows to skip
+```
+
+Example:
+
+```txt
+Sorted full result:
+0: Alpha Tee
+1: Beta Jacket
+2: Gamma Shirt
+
+limit=2&offset=1:
+skip Alpha Tee
+return Beta Jacket and Gamma Shirt
+```
+
+Pagination happens after ownership, filters, and sorting:
+
+```txt
+ownership
+  ↓
+filters
+  ↓
+sorting
+  ↓
+pagination
+```
+
+This order matters because the API should paginate the final matching result set, not the entire database.
+
+### Pagination Validation
+
+`limit` is constrained:
+
+```txt
+minimum → 1
+maximum → 100
+```
+
+`offset` is constrained:
+
+```txt
+minimum → 0
+```
+
+Invalid pagination values return:
+
+```http
+422 Unprocessable Entity
+```
+
+### Pagination Metadata
+
+`GET /items` returns an item page response:
+
+```json
+{
+  "items": [],
+  "total": 0,
+  "limit": 20,
+  "offset": 0,
+  "has_more": false
+}
+```
+
+Metadata fields:
+
+```txt
+items    → current page of item records
+total    → total matching rows before pagination
+limit    → requested page size
+offset   → number of skipped rows
+has_more → whether another page exists
+```
+
+`has_more` is calculated as:
+
+```python
+offset + len(items) < total
+```
+
+Example with another page:
+
+```txt
+total = 37
+offset = 0
+len(items) = 20
+
+0 + 20 < 37
+has_more = true
+```
+
+Example on the last page:
+
+```txt
+total = 37
+offset = 20
+len(items) = 17
+
+20 + 17 < 37
+has_more = false
+```
+
+The frontend can use `has_more` to disable the Next button.
+
+---
+
+## Counting Items
+
+Pagination metadata needs the number of matching rows before pagination.
+
+That is why Suot has a separate counting operation:
+
+```txt
+get_items()
+  → returns the current page
+
+count_items()
+  → returns total matching rows before pagination
+```
+
+Both operations must use the same ownership and filter conditions.
+
+The count query should not apply sorting, limit, or offset.
+
+```txt
+Count query:
+  ownership
+  filters
+
+Page query:
+  ownership
+  filters
+  sorting
+  pagination
+```
+
+This keeps pagination metadata accurate.
+
+---
+
+## Shared Filter Helper
+
+Suot uses a shared filter-building helper so `get_items()` and `count_items()` apply the same ownership and filtering rules.
+
+Conceptually:
+
+```txt
+_build_item_filters()
+  ↓
+user ownership condition
+  ↓
+optional category filter
+  ↓
+optional brand filter
+  ↓
+optional condition filter
+  ↓
+optional min_price filter
+  ↓
+optional max_price filter
+```
+
+This prevents bugs where the list endpoint and count query disagree.
+
+Example bug this avoids:
+
+```txt
+/items?category=Shirt
+  → items returns only shirts
+  → total accidentally counts all items
+```
+
+Correct behavior:
+
+```txt
+/items?category=Shirt
+  → items returns only shirts
+  → total counts only shirts
+```
+
+---
+
 ## Closet Analytics
 
 ### Endpoint
@@ -637,14 +977,14 @@ brand counts
 most expensive item
 ```
 
-The first implementation calculates values in Python after loading the current user's items.
+Current implementation calculates values in Python after loading the current user's full item set.
 
 ```txt
 Require Bearer token
   ↓
 Identify current user
   ↓
-Fetch only that user's items
+Fetch all of that user's items for analytics
   ↓
 Loop through items
   ↓
@@ -653,7 +993,9 @@ Calculate totals and counts
 Return ItemStats response
 ```
 
-This favors clarity and testability. A later version can use SQL aggregation:
+This favors clarity and testability.
+
+A later version can use SQL aggregation:
 
 ```txt
 COUNT
@@ -661,6 +1003,65 @@ SUM
 GROUP BY
 ORDER BY
 LIMIT
+```
+
+### Analytics Must Not Use Paginated Items
+
+This is an important backend bug pattern.
+
+After pagination, `get_items()` returns only one page:
+
+```txt
+limit=20
+offset=0
+```
+
+So analytics should not call:
+
+```python
+items = get_items(db, user_id)
+```
+
+because that would only analyze the first page.
+
+Wrong behavior for a user with 25 items:
+
+```json
+{
+  "total_items": 20,
+  "total_closet_value": "20.00"
+}
+```
+
+Correct behavior:
+
+```json
+{
+  "total_items": 25,
+  "total_closet_value": "25.00"
+}
+```
+
+The deeper lesson:
+
+```txt
+A function that returns a page should not be reused when the caller needs the full dataset.
+```
+
+Different use cases need different query semantics:
+
+```txt
+Inventory page
+  → one paginated page
+
+Analytics dashboard
+  → full current-user item set
+
+Export
+  → all matching rows
+
+Recommendations
+  → full closet or a specifically chosen subset
 ```
 
 ### Route Ordering
@@ -723,6 +1124,85 @@ send Authorization: Bearer <token>
 
 The same headers should be reused for all requests in one user's test flow.
 
+### List Endpoint Response Shape
+
+`GET /items` now returns an object:
+
+```json
+{
+  "items": [],
+  "total": 0,
+  "limit": 20,
+  "offset": 0,
+  "has_more": false
+}
+```
+
+So tests for the list endpoint should inspect:
+
+```python
+data = response.json()["items"]
+```
+
+But single-item and stats endpoints still return direct objects.
+
+```txt
+POST /items          → response.json()
+GET /items/{item_id} → response.json()
+PUT /items/{item_id} → response.json()
+GET /items/stats     → response.json()
+GET /items           → response.json()["items"]
+```
+
+### Pagination Metadata Tests
+
+Pagination metadata tests should verify both cases:
+
+```txt
+has_more = true
+  → more results exist after the current page
+
+has_more = false
+  → current page reaches the end
+```
+
+Example:
+
+```txt
+total = 2
+limit = 1
+offset = 0
+items returned = 1
+has_more = true
+```
+
+```txt
+total = 2
+limit = 1
+offset = 1
+items returned = 1
+has_more = false
+```
+
+### Analytics Regression Test
+
+Suot includes a regression test to ensure analytics are not limited by pagination.
+
+The test creates more than the default page size:
+
+```txt
+25 items
+```
+
+Then checks:
+
+```txt
+total_items == 25
+total_closet_value == "25.00"
+```
+
+This catches the bug where `/items/stats` accidentally uses paginated `get_items()` and only counts the first 20 rows.
+
 ### What the Test Suite Proves
 
 ```txt
@@ -736,6 +1216,15 @@ richer item field persistence
 empty and populated analytics
 analytics user isolation
 individual and combined filters
+minimum price filtering
+maximum price filtering
+price range filtering
+sorting by price, name, and purchase date
+invalid sorting validation
+pagination with limit and offset
+invalid pagination validation
+pagination metadata
+analytics are not limited by pagination
 ```
 
 ---
@@ -771,6 +1260,22 @@ merge
 sync main again
 ```
 
+Local branch cleanup after merge:
+
+```bash
+git branch -d feature/some-branch
+```
+
+This deletes the local branch only.
+
+It does not delete:
+
+```txt
+main
+merged commits
+GitHub PR history
+```
+
 ---
 
 ## Current Understanding Summary
@@ -791,6 +1296,8 @@ get_current_user() identifies the authenticated user
 Router passes current_user.id and request values to a service
   ↓
 Service builds an owner-scoped SQLAlchemy query
+  ↓
+Service applies optional filters, sorting, pagination, or analytics logic
   ↓
 Session communicates with PostgreSQL
   ↓
@@ -814,7 +1321,12 @@ cross-user isolation tests
 richer inventory data
 current-user closet analytics
 category, brand, and condition filters
+price range filters
 combined filters
+sorting
+pagination
+pagination metadata
+analytics protected from pagination bugs
 ```
 
 The most important security understanding is:
@@ -841,20 +1353,35 @@ The most important query understanding is:
 ```txt
 Start with the required ownership condition.
 Add optional filters only when provided.
-Keep list filtering in get_items().
+Sort only after filtering.
+Paginate only after sorting.
+Use a separate count query for pagination metadata.
+Do not reuse paginated list queries for analytics.
 Keep ID lookup in get_item_by_id().
-Test filters individually and in combination.
+Test filters, sorting, pagination, and ownership together.
 ```
 
-Next planned backend improvement:
+The most important API design understanding is:
 
 ```txt
-Phase 11B — Price range filters
+List endpoints often need metadata.
+Raw arrays are simple, but paginated objects are more useful for frontends.
+A frontend needs total, limit, offset, and has_more to build reliable pagination controls.
+```
 
-GET /items?min_price=50
-GET /items?max_price=150
-GET /items?min_price=50&max_price=150
+Next planned project milestone:
 
-min_price → ItemModel.price >= min_price
-max_price → ItemModel.price <= max_price
+```txt
+Phase 12 — Frontend MVP
+
+Goal:
+Log in
+  ↓
+view your own closet items
+  ↓
+add new items
+  ↓
+filter, sort, and paginate inventory
+  ↓
+view basic closet analytics
 ```
