@@ -10,6 +10,10 @@ from app.models.item import ItemModel
 from app.schemas.item import ItemCreate
 
 
+# 1. user ownership
+# 2. filters
+# 3. sorting
+# 4. pagination
 def get_items(
     db: Session,
     user_id: int,
@@ -20,6 +24,8 @@ def get_items(
     max_price: Decimal | None = None,
     sort_by: str | None = None,
     sort_order: str = "asc",
+    limit: int = 20,
+    offset: int = 0,
 ) -> list[ItemModel]:
     statement = select(ItemModel).where(ItemModel.user_id == user_id)
 
@@ -51,6 +57,8 @@ def get_items(
             statement = statement.order_by(sort_column.desc())
         else:
             statement = statement.order_by(sort_column.asc())
+
+    statement = statement.limit(limit).offset(offset)
 
     return list(db.scalars(statement))
 

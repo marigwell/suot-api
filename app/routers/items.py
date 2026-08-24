@@ -4,7 +4,7 @@
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from decimal import Decimal
 
@@ -38,9 +38,12 @@ def list_items(
     max_price: Decimal | None = None,
     sort_by: Literal["name", "price", "purchase_date"] | None = None,
     sort_order: Literal["asc", "desc"] = "asc",
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ):
     """
-    Return items owned by the current user with options to be filtered by category, brand, condition, or price range.
+    Return items owned by the current user, optionally filtered, sorted,
+    and paginated.
     """
     return get_items(
         db,
@@ -52,6 +55,8 @@ def list_items(
         max_price=max_price,
         sort_by=sort_by,
         sort_order=sort_order,
+        limit=limit,
+        offset=offset,
     )
 
 

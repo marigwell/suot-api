@@ -1290,3 +1290,234 @@ def test_rejects_invalid_sort_order():
     )
 
     assert response.status_code == 422
+
+
+def test_paginates_items_with_limit():
+    """
+    Tests limiting the number of returned items.
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Ringer Tee",
+            "brand": "UNIQLO",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "25.00",
+            "condition": "good",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Long Coat Jacket",
+            "brand": "COS",
+            "category": "Outerwear",
+            "color": "Black",
+            "size": "M",
+            "price": "180.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Climber T-Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "Black",
+            "size": "M",
+            "price": "45.00",
+            "condition": "excellent",
+        },
+        headers=headers,
+    )
+
+    response = client.get(
+        "/items?sort_by=name&sort_order=asc&limit=2",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    item_names = [item["name"] for item in data]
+
+    assert item_names == [
+        "Climber T-Shirt",
+        "Long Coat Jacket",
+    ]
+
+
+def test_paginates_items_with_offset():
+    """
+    Tests skipping items with offset.
+    """
+    headers = get_auth_headers()
+
+    client.post(
+        "/items",
+        json={
+            "name": "Alpha Tee",
+            "brand": "UNIQLO",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "25.00",
+            "condition": "good",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Beta Jacket",
+            "brand": "COS",
+            "category": "Outerwear",
+            "color": "Black",
+            "size": "M",
+            "price": "180.00",
+            "condition": "new",
+        },
+        headers=headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Gamma Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "Black",
+            "size": "M",
+            "price": "120.00",
+            "condition": "excellent",
+        },
+        headers=headers,
+    )
+
+    response = client.get(
+        "/items?sort_by=name&sort_order=asc&limit=2&offset=1",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    item_names = [item["name"] for item in data]
+
+    assert item_names == [
+        "Beta Jacket",
+        "Gamma Shirt",
+    ]
+
+
+def test_rejects_limit_less_than_one():
+    """
+    Tests that limit must be at least 1.
+    """
+    headers = get_auth_headers()
+
+    response = client.get(
+        "/items?limit=0",
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_rejects_limit_greater_than_one_hundred():
+    """
+    Tests that limit cannot exceed 100.
+    """
+    headers = get_auth_headers()
+
+    response = client.get("/items?limit=101", headers=headers)
+
+    assert response.status_code == 422
+
+
+def test_rejects_negative_offset():
+    """
+    Tests that offset cannot be negative.
+    """
+    headers = get_auth_headers()
+
+    response = client.get(
+        "/items?limit=2&offset=-1",
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_pagination_only_includes_current_users_items():
+    """
+    Tests that pagination still respects item ownership.
+    """
+    jim_headers = get_auth_headers_for_user("jim@example.com", "jim")
+    sam_headers = get_auth_headers_for_user("sam@example.com", "sam")
+
+    client.post(
+        "/items",
+        json={
+            "name": "Alpha Tee",
+            "brand": "UNIQLO",
+            "category": "Shirt",
+            "color": "White",
+            "size": "M",
+            "price": "25.00",
+            "condition": "good",
+        },
+        headers=jim_headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Gamma Shirt",
+            "brand": "Saturn LA",
+            "category": "Shirt",
+            "color": "Black",
+            "size": "M",
+            "price": "120.00",
+            "condition": "excellent",
+        },
+        headers=jim_headers,
+    )
+
+    client.post(
+        "/items",
+        json={
+            "name": "Beta Jacket",
+            "brand": "COS",
+            "category": "Outerwear",
+            "color": "Black",
+            "size": "M",
+            "price": "180.00",
+            "condition": "new",
+        },
+        headers=sam_headers,
+    )
+
+    response = client.get(
+        "/items?sort_by=name&sort_order=asc&limit=1&offset=1",
+        headers=jim_headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["name"] == "Gamma Shirt"
