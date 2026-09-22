@@ -18,6 +18,10 @@ class ItemCreate(BaseModel):
     notes: str | None = None
 
 
+class ItemUpdate(BaseModel):
+    notes: str | None = None
+
+
 class Item(ItemCreate):
     model_config = ConfigDict(from_attributes=True)
 
