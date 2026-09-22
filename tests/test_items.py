@@ -1654,3 +1654,44 @@ def test_item_stats_include_more_than_default_page_size():
 
     assert data["total_items"] == 25
     assert data["total_closet_value"] == "25.00"
+
+
+def test_item_patch():
+    """
+    Tests that an item can be partially updated without overwriting omitted fields.
+    """
+    headers = get_auth_headers()
+
+    create_response = client.post(
+        "/items",
+        headers=headers,
+        json={
+            "name": "COS Long Coat",
+            "brand": "COS",
+            "category": "Outerwear",
+            "color": "Black",
+            "size": "M",
+            "notes": "Original notes",
+        },
+    )
+
+    item = create_response.json()
+    item_id = item["id"]
+
+    patch_response = client.patch(
+        f"/items/{item_id}",
+        headers=headers,
+        json={"notes": "Updated notes"},
+    )
+
+    assert patch_response.status_code == 200
+
+    updated_item = patch_response.json()
+
+    assert updated_item["notes"] == "Updated notes"
+
+    assert updated_item["name"] == "COS Long Coat"
+    assert updated_item["brand"] == "COS"
+    assert updated_item["category"] == "Outerwear"
+    assert updated_item["color"] == "Black"
+    assert updated_item["size"] == "M"

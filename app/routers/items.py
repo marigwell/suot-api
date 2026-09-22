@@ -4,14 +4,14 @@
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from decimal import Decimal
 
 from app.database import get_db
 from app.models.user import UserModel
 from app.routers.auth import get_current_user
-from app.schemas.item import Item, ItemCreate, ItemStats, ItemPage
+from app.schemas.item import Item, ItemCreate, ItemStats, ItemPage, ItemUpdate
 from app.services.item_service import (
     count_items,
     create_item,
@@ -20,6 +20,7 @@ from app.services.item_service import (
     get_items,
     update_item,
     get_item_stats,
+    partial_update_item,
 )
 
 router = APIRouter(prefix="/items", tags=["Items"])
@@ -152,3 +153,25 @@ def remove_item(
         raise HTTPException(status_code=404, detail="Item not found")
 
     return deleted
+
+
+@router.patch("/{item_id}", response_model=Item)
+def patch_item(
+    item_id: int,
+    item_data: ItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    item = partial_update_item(
+        db=db,
+        item_id=item_id,
+        item_data=item_data,
+        user_id=current_user.id,
+    )
+
+    if item is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Item not found"
+        )
+
+    return item

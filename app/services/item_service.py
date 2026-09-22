@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.item import ItemModel
-from app.schemas.item import ItemCreate
+from app.schemas.item import ItemCreate, ItemUpdate
 
 
 def _build_item_filters(
@@ -166,6 +166,28 @@ def update_item(
     item.purchase_date = item_data.purchase_date
     item.condition = item_data.condition
     item.notes = item_data.notes
+
+    db.commit()
+    db.refresh(item)
+
+    return item
+
+
+def partial_update_item(
+    db: Session,
+    item_id: int,
+    item_data: ItemUpdate,
+    user_id: int,
+) -> ItemModel | None:
+    item = get_item_by_id(db, item_id, user_id)
+
+    if item is None:
+        return None
+
+    changes = item_data.model_dump(exclude_unset=True)
+
+    for field, value in changes.items():
+        setattr(item, field, value)
 
     db.commit()
     db.refresh(item)
